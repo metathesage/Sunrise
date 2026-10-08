@@ -75,6 +75,16 @@ icons, and an ammo counter with a reload bar.
 **It is fully self-contained** - Three.js is inlined in the file, so it works offline, from
 `file://`, or through any viewer. No CDN, no import map, no network needed.
 
+**Loadout (swap + compare):** five procedural weapons - hand cannon, auto rifle, pulse rifle,
+scout rifle, rocket launcher - each changes both the model *and* the stats (mag size, fire
+interval, fire clip, recoil kick, ADS time), so the animation graph feels different per gun.
+Three procedural characters - vanguard / heavy / scout - with different proportions and gear.
+
+**Import your own meshes:** the *Import model (local OBJ)* panel accepts an `.obj` (file picker
+or drag & drop) and attaches it as the weapon or the character. Nothing is bundled, uploaded or
+fetched - this is the hook for meshes you extract at runtime from your own install, which is
+exactly what the project's "no copyrighted data in the repo" rule requires.
+
 **Controller (Xbox / any "standard"-mapping gamepad):**
 
 | Input | Action |
