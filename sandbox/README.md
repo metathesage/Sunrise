@@ -62,6 +62,11 @@ in-app **developer control panel**:
   time; scrub / pause / step the current weapon clip.
 - **Tests:** an in-page "Run invariant tests" button.
 
+**Look & feel:** a first-person hand-cannon viewmodel, a night-time "Dreaming City"-style
+environment (fog, a distant skyline of spires with a mirrored ground reflection, blossom trees,
+drifting petals), and a Destiny-style HUD - segmented super bar, shield bar, circular radar,
+ability icons, and an ammo counter with a reload bar.
+
 **It is fully self-contained** - Three.js is inlined in the file, so it works offline, from
 `file://`, or through any viewer. No CDN, no import map, no network needed.
 
