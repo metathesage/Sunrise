@@ -80,10 +80,26 @@ scout rifle, rocket launcher - each changes both the model *and* the stats (mag 
 interval, fire clip, recoil kick, ADS time), so the animation graph feels different per gun.
 Three procedural characters - vanguard / heavy / scout - with different proportions and gear.
 
-**Import your own meshes:** the *Import model (local OBJ)* panel accepts an `.obj` (file picker
-or drag & drop) and attaches it as the weapon or the character. Nothing is bundled, uploaded or
-fetched - this is the hook for meshes you extract at runtime from your own install, which is
-exactly what the project's "no copyrighted data in the repo" rule requires.
+**Import real models (local):** the *Import real model (local)* panel accepts `.glb` / `.gltf` /
+`.obj` via file picker or drag & drop and attaches it as the **weapon** or the **character**.
+`.glb` supports **skinned meshes and animations** (an `AnimationMixer` plays the first clip, and
+you can switch clips). Name a file `*char*` to load it as the character. Nothing is bundled,
+uploaded or fetched - the file is read from your disk in the browser. This is the hook for
+meshes you extract at runtime from your own install, which is what the project's "no copyrighted
+data in the repo" rule requires.
+
+**Programmatic ingest API** - lets the Sunrise pipeline push extracted data straight in:
+
+```js
+window.SunriseSandbox.loadGLB(arrayBuffer, 'character', 'guardian.glb');
+window.SunriseSandbox.loadOBJ(objText, 'weapon');
+window.SunriseSandbox.loadFromURL(url, 'character');
+window.SunriseSandbox.setCharacter('heavy');
+window.SunriseSandbox.setWeapon('pulse_rifle');
+window.SunriseSandbox.clips();      // clip names on the loaded model
+window.SunriseSandbox.playClip(0);  // play a clip
+window.SunriseSandbox.state();      // { weapon, character, ammo, state, aim }
+```
 
 **Controller (Xbox / any "standard"-mapping gamepad):**
 
