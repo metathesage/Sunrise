@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Destiny-Style Character, Animation &amp; Emote Systems</title>
+<style>
+  :root {
+    --bg: #0e1116; --panel: #151a22; --panel2: #1b2230; --fg: #d7dee8;
+    --muted: #8b97a8; --accent: #6ea8fe; --accent2: #f0b866; --border: #263041;
+    --code-bg: #0b0f14;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  .layout { display: grid; grid-template-columns: 320px minmax(0, 1fr); }
+  nav.toc {
+    position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto;
+    background: var(--panel); border-right: 1px solid var(--border); padding: 24px 18px;
+  }
+  nav.toc h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .12em; color: var(--muted); margin: 0 0 12px; }
+  nav.toc a { display: block; color: var(--fg); text-decoration: none; font-size: 13.5px; padding: 3px 8px; border-radius: 6px; }
+  nav.toc a:hover { background: var(--panel2); color: var(--accent); }
+  nav.toc a.lvl3 { padding-left: 22px; color: var(--muted); font-size: 12.5px; }
+  main { max-width: 940px; padding: 48px 56px 96px; }
+  h1 { font-size: 34px; line-height: 1.2; margin: 0 0 8px; }
+  h2 { font-size: 25px; margin: 46px 0 14px; padding-top: 18px; border-top: 1px solid var(--border); }
+  h3 { font-size: 19px; margin: 30px 0 10px; color: var(--accent2); }
+  h4 { font-size: 16px; margin: 22px 0 8px; }
+  p { margin: 12px 0; }
+  a { color: var(--accent); }
+  code { background: var(--code-bg); border: 1px solid var(--border); border-radius: 5px; padding: 1px 6px; font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; font-size: 13.5px; color: #e6c07b; }
+  pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; overflow-x: auto; }
+  pre code { background: none; border: 0; padding: 0; color: var(--fg); font-size: 13px; line-height: 1.5; }
+  blockquote { margin: 16px 0; padding: 10px 18px; border-left: 3px solid var(--accent); background: var(--panel); color: var(--muted); border-radius: 0 8px 8px 0; }
+  table { border-collapse: collapse; width: 100%; margin: 18px 0; font-size: 14px; }
+  th, td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--panel2); color: var(--accent2); }
+  tr:nth-child(even) td { background: rgba(255,255,255,.02); }
+  ul, ol { margin: 12px 0; padding-left: 26px; }
+  li { margin: 5px 0; }
+  input[type=checkbox] { margin-right: 6px; }
+  hr { border: 0; border-top: 1px solid var(--border); margin: 34px 0; }
+  @media (max-width: 980px) { .layout { grid-template-columns: 1fr; } nav.toc { position: relative; height: auto; } main { padding: 28px 20px 64px; } }
+</style>
+</head>
+<body>
+<div class="layout">
+<nav class="toc">
+  <h2>Contents</h2>
+  <a class="lvl3" href="#engineering-reference-production-workflow-sunrise-context">Engineering Reference &amp; Production Workflow (Sunrise context)</a>
+<a class="lvl2" href="#0-how-to-use-this-document">0. How to use this document</a>
+<a class="lvl2" href="#1-scope-intent-and-boundary">1. Scope, intent, and boundary</a>
+<a class="lvl3" href="#1-1-intent">1.1 Intent</a>
+<a class="lvl3" href="#1-2-hard-boundaries-non-negotiable">1.2 Hard boundaries (non-negotiable)</a>
+<a class="lvl3" href="#1-3-what-similar-results-means-here">1.3 What &quot;similar results&quot; means here</a>
+<a class="lvl2" href="#2-mental-model-the-layered-animation-stack">2. Mental model: the layered animation stack</a>
+<a class="lvl3" href="#2-1-the-three-clocks">2.1 The three clocks</a>
+<a class="lvl2" href="#3-how-the-systems-work">3. How the systems work</a>
+<a class="lvl3" href="#3-1-character-rig-skeleton-conventions">3.1 Character rig &amp; skeleton conventions</a>
+<a class="lvl3" href="#3-2-first-person-viewmodel-vs-world-body">3.2 First-person viewmodel vs world body</a>
+<a class="lvl3" href="#3-3-camera-as-a-rigged-entity">3.3 Camera as a rigged entity</a>
+<a class="lvl3" href="#3-4-the-animation-graph-layers-states-blend-trees">3.4 The animation graph: layers, states, blend trees</a>
+<a class="lvl3" href="#3-5-the-notify-event-system-gameplay-sync">3.5 The notify / event system (gameplay sync)</a>
+<a class="lvl3" href="#3-6-additive-recoil-model-with-numbers">3.6 Additive recoil model (with numbers)</a>
+<a class="lvl3" href="#3-7-sway-breathing-ads">3.7 Sway, breathing, ADS</a>
+<a class="lvl3" href="#3-8-ik-hand-placement">3.8 IK &amp; hand placement</a>
+<a class="lvl3" href="#3-9-secondary-motion-spring-bones-cloth">3.9 Secondary motion (spring bones, cloth)</a>
+<a class="lvl3" href="#3-10-emote-system">3.10 Emote system</a>
+<a class="lvl3" href="#3-11-input-command-layer">3.11 Input command layer</a>
+<a class="lvl3" href="#3-12-networking-prediction-authority-replication">3.12 Networking: prediction, authority, replication</a>
+<a class="lvl2" href="#4-data-definition-pipeline-sunrise-context">4. Data &amp; definition pipeline (Sunrise context)</a>
+<a class="lvl3" href="#4-1-the-extraction-path">4.1 The extraction path</a>
+<a class="lvl3" href="#4-2-animation-relevant-definition-taxonomy">4.2 Animation-relevant definition taxonomy</a>
+<a class="lvl3" href="#4-3-runtime-consumption-model">4.3 Runtime consumption model</a>
+<a class="lvl3" href="#4-4-what-you-can-implement-without-any-asset-data">4.4 What you can implement without any asset data</a>
+<a class="lvl2" href="#5-exact-production-workflow">5. Exact production workflow</a>
+<a class="lvl3" href="#phase-0-recon-instrumentation-3-5-days">Phase 0 - Recon &amp; instrumentation  (3-5 days)</a>
+<a class="lvl3" href="#phase-1-data-model-registry-4-6-days">Phase 1 - Data model &amp; registry  (4-6 days)</a>
+<a class="lvl3" href="#phase-2-state-machine-core-5-8-days">Phase 2 - State machine core  (5-8 days)</a>
+<a class="lvl3" href="#phase-3-hand-cannon-vertical-slice-8-12-days">Phase 3 - Hand-cannon vertical slice  (8-12 days)</a>
+<a class="lvl3" href="#phase-4-procedural-overlays-5-7-days">Phase 4 - Procedural overlays  (5-7 days)</a>
+<a class="lvl3" href="#phase-5-emote-system-4-6-days">Phase 5 - Emote system  (4-6 days)</a>
+<a class="lvl3" href="#phase-6-input-replication-6-9-days">Phase 6 - Input + replication  (6-9 days)</a>
+<a class="lvl3" href="#phase-7-tuning-tools-qa-ongoing">Phase 7 - Tuning tools &amp; QA  (ongoing)</a>
+<a class="lvl3" href="#5-9-cross-phase-definition-of-done-applies-to-every-pr">5.9 Cross-phase Definition of Done (applies to every PR)</a>
+<a class="lvl2" href="#6-conventions-naming-curves-tuning-knobs-budgets">6. Conventions: naming, curves, tuning knobs, budgets</a>
+<a class="lvl3" href="#6-1-clip-naming">6.1 Clip naming</a>
+<a class="lvl3" href="#6-2-animation-curve-channels-drive-procedural-systems-from-the-clip">6.2 Animation curve channels (drive procedural systems from the clip)</a>
+<a class="lvl3" href="#6-3-central-tuning-config-data-driven">6.3 Central tuning config (data-driven)</a>
+<a class="lvl3" href="#6-4-budgets-per-frame-pc-mid-tier">6.4 Budgets (per frame, PC mid-tier)</a>
+<a class="lvl2" href="#7-performance-profiling">7. Performance &amp; profiling</a>
+<a class="lvl2" href="#8-qa-feel-validation-harness">8. QA / feel validation harness</a>
+<a class="lvl3" href="#8-1-deterministic-input-scripts">8.1 Deterministic input scripts</a>
+<a class="lvl3" href="#8-2-invariants-to-assert-unit-regression-tests">8.2 Invariants to assert (unit/regression tests)</a>
+<a class="lvl3" href="#8-3-feel-metrics-quantitative">8.3 Feel metrics (quantitative)</a>
+<a class="lvl2" href="#9-agent-prompt-library-lead-dev-level">9. Agent prompt library (lead-dev level)</a>
+<a class="lvl3" href="#9-0-shared-preamble-prepend-to-all-prompts">9.0 Shared preamble (prepend to all prompts)</a>
+<a class="lvl3" href="#9-1-prompt-recon-def-enumeration">9.1 Prompt - Recon / def enumeration</a>
+<a class="lvl3" href="#9-2-prompt-data-model-registry">9.2 Prompt - Data model + registry</a>
+<a class="lvl3" href="#9-3-prompt-hierarchical-state-machine-core">9.3 Prompt - Hierarchical state machine core</a>
+<a class="lvl3" href="#9-4-prompt-hand-cannon-vertical-slice">9.4 Prompt - Hand-cannon vertical slice</a>
+<a class="lvl3" href="#9-5-prompt-additive-recoil-spring">9.5 Prompt - Additive recoil spring</a>
+<a class="lvl3" href="#9-6-prompt-sway-breathing-ads">9.6 Prompt - Sway / breathing / ADS</a>
+<a class="lvl3" href="#9-7-prompt-ik-secondary-motion">9.7 Prompt - IK &amp; secondary motion</a>
+<a class="lvl3" href="#9-8-prompt-emote-system">9.8 Prompt - Emote system</a>
+<a class="lvl3" href="#9-9-prompt-input-command-layer-replication">9.9 Prompt - Input command layer + replication</a>
+<a class="lvl3" href="#9-10-prompt-live-tuning-feel-harness">9.10 Prompt - Live tuning + feel harness</a>
+<a class="lvl2" href="#10-appendices">10. Appendices</a>
+<a class="lvl3" href="#10-a-consolidated-tuning-table-starting-points">10.A Consolidated tuning table (starting points)</a>
+<a class="lvl3" href="#10-b-glossary">10.B Glossary</a>
+<a class="lvl3" href="#10-c-references-public-non-copyrighted">10.C References (public, non-copyrighted)</a>
+<a class="lvl3" href="#10-d-one-page-summary">10.D One-page summary</a>
+</nav>
+<main>
+<h1 id="destiny-style-character-animation-emote-systems">Destiny-Style Character, Animation &amp; Emote Systems</h1>
+<h3 id="engineering-reference-production-workflow-sunrise-context">Engineering Reference &amp; Production Workflow (Sunrise context)</h3>
+<blockquote><strong>Audience:</strong> engine/gameplay engineers, modders, technical animators, and coding agents working inside the Sunrise offline-preservation codebase.  <strong>What this document is:</strong> a from-first-principles breakdown of how AAA first-person character/animation/emote/weapon systems are architected, how to <em>study</em> a legacy build's data through the tag/definition pipeline, an exact phase-by-phase build workflow, and a library of lead-level agent prompts to drive implementation.  <strong>What this document is not:</strong> a cheat, a crack, or a guide to touching live servers. It contains no extracted/copyrighted game data. All game data is read at runtime, per the project's contribution rules.</blockquote>
+<hr />
+<h2 id="0-how-to-use-this-document">0. How to use this document</h2>
+<table><thead><tr><th>If you are...</th><th>Start at</th></tr></thead><tbody><tr><td>New to the codebase</td><td>§1 (scope), §2 (mental model), §4 (data pipeline)</td></tr><tr><td>A gameplay engineer</td><td>§3.4–§3.12, §5 (workflow), §9 (agent prompts)</td></tr><tr><td>A technical animator</td><td>§3.1–§3.3, §3.6–§3.9, §6 (conventions)</td></tr><tr><td>Driving coding agents</td><td>§9 (prompt library) + §5.9 (definition of done)</td></tr><tr><td>Reviewing a PR</td><td>§5.9, §6, §7, §8</td></tr></tbody></table>
+<p>The document is deliberately <strong>engine-agnostic in the concepts and concrete in the numbers.</strong> Where a value is a tuning constant, it is given as a starting point with a stated range; the "feel" lives in those curves and constants, not in proprietary tech.</p>
+<hr />
+<h2 id="1-scope-intent-and-boundary">1. Scope, intent, and boundary</h2>
+<h3 id="1-1-intent">1.1 Intent</h3>
+<p>We are reverse-engineering the <strong>behavior</strong> of a legacy, offline, local build's character and animation systems in order to (a) preserve it, (b) re-implement equivalent systems, and (c) document them. This is interoperability/preservation work on a game the user already owns and runs locally. It is not circumvention of protection on a live service.</p>
+<h3 id="1-2-hard-boundaries-non-negotiable">1.2 Hard boundaries (non-negotiable)</h3>
+<ul><li><strong>No live-server targeting.</strong> Nothing here talks to Bungie/Sony services or newer builds.</li><li><strong>No copyrighted data in the repo.</strong> Animation clips, meshes, textures, and definition</li></ul>
+<p>binaries are never committed. They are read at runtime from the user's own install.</p>
+<ul><li><strong>No assets shipped.</strong> Docs and code only.</li><li><strong>No anti-cheat circumvention.</strong> The target is an offline legacy build.</li><li><strong>Attribution.</strong> Cite tools/parsers used (tiger-pkg, alkahest, tachyscope, D2TagParser,</li></ul>
+<p>DestinyUnpacker, etc. — see <code>README.md</code> credits).</p>
+<h3 id="1-3-what-similar-results-means-here">1.3 What "similar results" means here</h3>
+<p>The <em>feel</em> of Destiny 2's gunplay/emotes is ~90% four well-understood techniques:</p>
+<ol><li><strong>Layered animation graphs</strong> (base locomotion + weapon + additive overlays + IK).</li><li><strong>Event/notify-driven gameplay sync</strong> (the animation is the timeline; events do the work).</li><li><strong>Procedural additive motion</strong> (recoil, sway, breathing) as spring-damper systems.</li><li><strong>Command-driven input</strong> with client prediction and server authority.</li></ol>
+<p>Reproducing these in Sunrise (or any engine) is an engineering problem, not a secrets problem.</p>
+<hr />
+<h2 id="2-mental-model-the-layered-animation-stack">2. Mental model: the layered animation stack</h2>
+<p>Every modern FPS character is a <strong>stack of layers evaluated bottom-up each frame</strong>. Thinking in layers (not clips) is the single most important mental shift.</p>
+<pre><code>                         +------------------------------------------+
+                         |  FINAL POSE  (skeleton local transforms)  |
+                         +---------------------^--------------------+
+                                               |
+   +--------------+   +--------------+   +-----+--------+   +----------------+
+   |  IK / GROUND |   |  SECONDARY   |   |   ADDITIVE   |   |  BASE + WEAPON |
+   |   ADJUSTMENT |&lt;--|  MOTION      |&lt;--|   OVERLAYS   |&lt;--|  STATE MACHINE |
+   |  (feet/hands)|   | (cloth,spring|   | (recoil,sway,|   | (locomotion +  |
+   |              |   |  bones)      |   |  breathing,  |   |  fire/reload/  |
+   |              |   |              |   |  aim offset) |   |  emote layer)  |
+   +--------------+   +--------------+   +--------------+   +----------------+
+        post            post              additive            blended base</code></pre>
+<p><strong>Evaluation order (bottom-up, right-to-left above):</strong></p>
+<ol><li><strong>Base layer</strong> - locomotion / idle, blended by speed + direction (a 1D or 2D blend space).</li><li><strong>Weapon layer</strong> - per-archetype state machine (idle/fire/ADS/reload/inspect/draw/holster),</li></ol>
+<p>masked or full-body depending on the weapon and view.</p>
+<ol><li><strong>Additive overlays</strong> - recoil, aim offset, breathing, flinch, sway. These <em>add</em> delta</li></ol>
+<p>rotations/translations on top of whatever the base produced. They never replace it.</p>
+<ol><li><strong>Secondary motion</strong> - springs on cloth, straps, cables, antennae, ponytails.</li><li><strong>IK / ground adjustment</strong> - hands to grip points, feet to ground, look-at constraints.</li></ol>
+<p><strong>Why layering matters:</strong> it makes systems independent and tunable. The animator authors a reload; the combat designer tunes recoil; neither blocks the other. If you hard-code a reload as one giant clip you will never match the responsiveness of a layered system.</p>
+<h3 id="2-1-the-three-clocks">2.1 The three clocks</h3>
+<p>Animation in a shooter runs on three independent clocks. Confusing them is a common failure:</p>
+<table><thead><tr><th>Clock</th><th>Rate</th><th>Drives</th></tr></thead><tbody><tr><td><strong>Render/tick</strong></td><td>30-144 Hz (frame)</td><td>Graph evaluation, springs, IK</td></tr><tr><td><strong>Animation sample</strong></td><td>clip fps (usually 30)</td><td>Base clip playback, notify firing</td></tr><tr><td><strong>Gameplay/net</strong></td><td>20-60 Hz (fixed)</td><td>State transitions, replication, authority</td></tr></tbody></table>
+<p>Springs and IK evaluate <strong>every frame</strong>. Notifies fire at <strong>clip sample time</strong>. Gameplay state changes are <strong>fixed-step</strong> and replicated. Keep them separate or you get jitter and desync.</p>
+<hr />
+<h2 id="3-how-the-systems-work">3. How the systems work</h2>
+<h3 id="3-1-character-rig-skeleton-conventions">3.1 Character rig &amp; skeleton conventions</h3>
+<ul><li><strong>Skeleton</strong> = hierarchy of joints with local transforms; <strong>mesh</strong> = skinned geometry bound to</li></ul>
+<p>those joints via weights. Nothing here is exotic.</p>
+<ul><li><strong>Naming conventions</strong> (adopt these or map to them): <code>root</code>, <code>pelvis</code>/<code>hips</code>, <code>spine_01..03</code>,</li></ul>
+<p><code>neck_01</code>, <code>head</code>, <code>clavicle_l/r</code>, <code>upperarm_l/r</code>, <code>lowerarm_l/r</code>, <code>hand_l/r</code>, <code>thigh_l/r</code>, <code>calf_l/r</code>, <code>foot_l/r</code>, <code>ball_l/r</code>. Prefix left/right consistently.</p>
+<ul><li><strong>Bind pose</strong> is the reference; all animation deltas are relative to it.</li><li><strong>Retargeting:</strong> author on a common/mannequin skeleton, retarget to character skeletons. Keep</li></ul>
+<p>a <strong>reference skeleton</strong> so clips are portable.</p>
+<ul><li><strong>Grip/attachment points:</strong> each weapon defines named sockets (<code>grip_r</code>, <code>grip_l</code>,</li></ul>
+<p><code>muzzle</code>, <code>eject</code>, <code>mag_well</code>, <code>optic</code>, <code>muzzle_flash</code>, <code>shell_eject</code>). IK and effects bind to these, never to hard-coded offsets.</p>
+<h3 id="3-2-first-person-viewmodel-vs-world-body">3.2 First-person viewmodel vs world body</h3>
+<p>This split is essential and often misunderstood.</p>
+<table><thead><tr><th>Aspect</th><th>FP viewmodel</th><th>World (3rd-person) body</th></tr></thead><tbody><tr><td>Purpose</td><td>What the local player sees</td><td>What <em>other</em> players see</td></tr><tr><td>Skeleton</td><td>Own arms/weapon rig</td><td>Full character body</td></tr><tr><td>Camera</td><td>Attached to viewmodel root</td><td>N/A (camera is separate)</td></tr><tr><td>FOV</td><td>Often separate/narrower</td><td>World FOV</td></tr><tr><td>Anim set</td><td>Full: reload, inspect, ADS, fire</td><td>Coarser: locomotion, emote, fire, reload</td></tr><tr><td>Shadows</td><td>Often disabled or fake</td><td>Full</td></tr><tr><td>Cost</td><td>Low-poly arms, high detail gun</td><td>Full character + weapon</td></tr></tbody></table>
+<p><strong>Key consequences:</strong></p>
+<ul><li>A reload can look <em>better</em> in FP than the world body, because the FP clip is authored purely</li></ul>
+<p>for the camera. The two are <strong>not</strong> required to match frame-for-frame; they must match in <strong>gameplay timing</strong> (when the mag actually refills).</p>
+<ul><li>The FP viewmodel needs its <strong>own light rig / rim light</strong> so it reads in dark environments.</li><li><strong>Motion is camera-relative.</strong> The viewmodel root follows the camera with its own spring</li></ul>
+<p>(bob, sway) so it lags slightly behind - that lag is a huge part of "game feel."</p>
+<h3 id="3-3-camera-as-a-rigged-entity">3.3 Camera as a rigged entity</h3>
+<p>The camera is not a static point. It is a rig with, at minimum:</p>
+<pre><code>camera_root            (yaw/pitch from player look input)
+  +- camera_recoil     (additive recoil impulse, spring-decayed)
+      +- camera_shake  (perlin/hit shake, event-driven)
+          +- camera_sway (breathing + movement bob)
+              +- camera_fov (ADS/zoom lerp + sprint FOV kick)</code></pre>
+<ul><li><strong>Recoil</strong> is applied to <code>camera_recoil</code> as an additive pitch/yaw impulse, then <strong>springs back</strong></li></ul>
+<p>toward zero (this is why you can "pull down" to control a hand cannon).</p>
+<ul><li><strong>Shake</strong> is event-driven (explosions, taking damage, landing).</li><li><strong>Sway/breathing</strong> is low-frequency noise so the reticle is never perfectly still.</li><li><strong>ADS</strong> lerps FOV (e.g. 90 deg -&gt; 55 deg) over ~0.15-0.25 s and blends the weapon to its aim pose.</li></ul>
+<p>The player's <em>aim</em> (where shots go) and the camera's <em>presentation</em> are related but distinct: hit-scan originates from the camera/reticle ray, while the visible weapon muzzle is cosmetic until it converges (see section 3.6, muzzle convergence).</p>
+<h3 id="3-4-the-animation-graph-layers-states-blend-trees">3.4 The animation graph: layers, states, blend trees</h3>
+<p>The graph is a <strong>directed structure evaluated every frame</strong>. Three primitives do all the work:</p>
+<p><strong>(a) Blend space (a.k.a. blend tree / 1D-2D blend).</strong> Maps continuous inputs to a weighted mix of clips. Locomotion example:</p>
+<pre><code>Input axes:  speed (0..1)  x  direction (-180..180 deg)
+Clips:       idle | walk_f | walk_b | walk_l | walk_r | run_f | run_b | strafe_l | strafe_r
+Output:      weighted pose</code></pre>
+<p><strong>(b) State machine.</strong> Discrete states with transition rules. Weapon example:</p>
+<pre><code>        +----------------------------------------------------------+
+        v                                                          |
+   [IDLE] --fire--&gt; [FIRE] --auto/next--&gt; [FIRE] --done--&gt; [IDLE] |
+     |  \             |                                          |
+     |   \--reload--&gt; [RELOAD] --notify--&gt; [RELOAD_TAC] --done---+|
+     |    \--ads-----&gt; [ADS] --fire--&gt; [ADS_FIRE] --done--&gt; [ADS]-+
+     |     \--emote--&gt; [EMOTE] --cancel--&gt; (previous state)       |
+     \--holster--&gt; [HOLSTER] --&gt; [HOLSTERED]</code></pre>
+<p>Transition rules are <strong>conditions</strong>, not just triggers: <code>can_fire</code>, <code>ammo &gt; 0</code>, <code>ads_held</code>, <code>reload_requested</code>, <code>emote_priority_ok</code>. Priority ordering matters (see emotes, section 3.10).</p>
+<p><strong>(c) Layer mask.</strong> A layer can affect all bones (full-body) or a subset (upper-body mask: spine up, arms, head). Emotes and aim offsets typically use masks; reloads often use full-body in FP and a weapon mask in the world body.</p>
+<p><strong>Sync groups.</strong> Group layers so a reload and its weapon-mask layer share a normalized time and don't drift. Use <code>sync_group = "reload"</code> with a leader/follower.</p>
+<h3 id="3-5-the-notify-event-system-gameplay-sync">3.5 The notify / event system (gameplay sync)</h3>
+<p>This is the most under-appreciated system. <strong>Animation is the timeline; notifies do the gameplay.</strong></p>
+<p>A <strong>notify</strong> (Unity: Animation Event; Unreal: Anim Notify) is a timestamped callback inside a clip. When the clip's playhead crosses it, it fires exactly once (or per-loop).</p>
+<p>Hand-cannon reload as a notify timeline (times illustrative for a ~2.3 s reload):</p>
+<pre><code>t=0.00  NOTIFY: reload_begin        -&gt; lock fire, play mag-out SFX, spawn &quot;old mag&quot; prop
+t=0.35  NOTIFY: mag_eject           -&gt; detach mag mesh, drop physics prop, SFX
+t=0.90  NOTIFY: mag_insert          -&gt; attach new mag mesh, SFX
+t=1.60  NOTIFY: ammo_refill         -&gt; *** gameplay: magazine = capacity ***
+t=1.85  NOTIFY: chamber_round       -&gt; play hammer/cylinder SFX
+t=2.30  NOTIFY: reload_end          -&gt; unlock fire, transition to IDLE/ADS</code></pre>
+<p><strong>Rules of notifies:</strong></p>
+<ul><li><strong>Gameplay truth lives on a notify, never on clip end.</strong> Clip end is a rendering concept;</li></ul>
+<p>notify time is the contract. If a player swaps weapons at t=1.5, the mag should already be full (ammo_refill at 1.6 may be skipped only if the swap is <em>after</em> it).</p>
+<ul><li>Notifies must be <strong>deterministic</strong> and <strong>replicated</strong> (send the event, not the clip frame).</li><li>Author <strong>interrupt handling</strong>: which notifies fire if the clip is blended out early.</li><li>Separate <strong>cosmetic notifies</strong> (SFX/VFX) from <strong>gameplay notifies</strong> (ammo, state). Cosmetic</li></ul>
+<p>ones may be skipped on low-LOD remote players.</p>
+<h3 id="3-6-additive-recoil-model-with-numbers">3.6 Additive recoil model (with numbers)</h3>
+<p>Recoil is a <strong>critically-damped spring</strong> applied additively to camera + weapon, driven by a per-shot impulse. This is the actual math to implement.</p>
+<p><strong>State per axis (pitch, yaw, and weapon kick):</strong> <code>x</code> (offset), <code>v</code> (velocity).</p>
+<p>Per frame (dt seconds):</p>
+<pre><code>// Spring-damper toward rest (0):
+//   omega = 2*pi*frequency
+//   stiffness k = omega^2 ; damping c = 2*zeta*omega
+// Critically damped =&gt; zeta = 1
+a  = -k * x - c * v
+v += a * dt
+x += v * dt</code></pre>
+<p><strong>Impulse on fire (hand cannon, per shot):</strong></p>
+<table><thead><tr><th>Parameter</th><th>Symbol</th><th>Value</th><th>Range</th></tr></thead><tbody><tr><td>Recoil frequency</td><td><code>f</code></td><td>9.0 Hz</td><td>6-14</td></tr><tr><td>Damping ratio</td><td><code>zeta</code></td><td>1.0 (critical)</td><td>0.7-1.0</td></tr><tr><td>Pitch kick</td><td><code>impulse_pitch</code></td><td>-2.4 deg</td><td>-1.5 .. -4.0</td></tr><tr><td>Yaw kick (randomized)</td><td><code>impulse_yaw</code></td><td>+/- 0.35 deg</td><td>0.1 .. 0.7</td></tr><tr><td>Camera vs weapon split</td><td><code>split</code></td><td>60% camera / 40% weapon</td><td>40-80</td></tr><tr><td>Recovery delay</td><td><code>hold</code></td><td>0.12 s before spring engages</td><td>0.05-0.25</td></tr></tbody></table>
+<pre><code>// On FIRE event:
+v_pitch += impulse_pitch * omega
+v_yaw   += rand(-1,1) * impulse_yaw * omega
+recoil_hold_timer = hold
+// In update: only run the spring when recoil_hold_timer &lt;= 0
+// (the hold makes the kick readable before recovery starts)</code></pre>
+<p><strong>Muzzle convergence (important for feel):</strong> the cosmetic muzzle and the camera ray converge after recoil. Implement as a lerp of the <em>aim direction</em> toward the <em>muzzle direction</em> with a time constant (~0.08 s), so shots visually "leave the gun" even though hitscan uses the camera.</p>
+<p><strong>Aim punch / view punch:</strong> a short, non-recoverable camera nudge (usually small) so consecutive shots feel like they <em>push</em> you. Keep it separate from the recoverable spring.</p>
+<h3 id="3-7-sway-breathing-ads">3.7 Sway, breathing, ADS</h3>
+<ul><li><strong>Breathing:</strong> sum of 2-3 sine/noise terms (0.15-0.4 Hz) applied additively to camera + arms.</li></ul>
+<p>Amplitude scales down while ADS (<code>breath_scale = 0.35</code>).</p>
+<ul><li><strong>Movement sway/bob:</strong> driven by velocity and turn rate; the viewmodel lags the camera with a</li></ul>
+<p>spring (separate from recoil). Turning left, the gun swings right, then settles.</p>
+<ul><li><strong>Landing/impact:</strong> on land, apply a downward camera impulse + a weapon dip, both spring-recovered.</li><li><strong>ADS blend:</strong> a single <code>aim</code> scalar 0..1 driving:<br />FOV lerp (hip 90 -&gt; aim 55)<br />weapon position/rotation -&gt; aim pose<br />sway amplitude multiplier<br />reticle visibility</li></ul>
+<p>Use <code>smoothstep</code> for the scalar, ~0.18 s to aim, ~0.14 s to un-aim (asymmetric = snappier feel).</p>
+<h3 id="3-8-ik-hand-placement">3.8 IK &amp; hand placement</h3>
+<ul><li><strong>Two-bone IK</strong> (upperarm -&gt; lowerarm -&gt; hand) to place the hand on the weapon grip socket.</li></ul>
+<p>Always run IK <em>after</em> additive layers so recoil doesn't break the grip.</p>
+<ul><li><strong>Aim IK / look-at:</strong> constrain the upper body toward the aim direction while the lower body</li></ul>
+<p>keeps locomotion (used for strafing + aiming).</p>
+<ul><li><strong>Foot IK:</strong> raycast to ground; blend foot height/rotation. Essential for slopes.</li><li><strong>Weapon-to-hand vs hand-to-weapon:</strong> decide authority. Usually <strong>hand IK follows the weapon</strong></li></ul>
+<p>in FP (weapon parented to a socket, hands IK to grip), and <strong>weapon follows hand</strong> in the world body (weapon parented to hand socket).</p>
+<ul><li><strong>Solver settings:</strong> iterations 1-2 for two-bone (analytic), max 8-16 for FABRIK chains; clamp</li></ul>
+<p>per-frame IK delta to avoid popping when the target jumps.</p>
+<h3 id="3-9-secondary-motion-spring-bones-cloth">3.9 Secondary motion (spring bones, cloth)</h3>
+<ul><li><strong>Spring bones:</strong> a chain of joints integrated with a spring-damper following the parent's</li></ul>
+<p>motion (verlet or explicit). Parameters: <code>stiffness</code>, <code>damping</code>, <code>gravity</code>, <code>drag</code>.</p>
+<ul><li>Apply to: straps, cables, antennae, ponytails, hood cloth, weapon slings.</li><li><strong>Cloth:</strong> engine cloth solver (Unreal Chaos, Unity Cloth) for capes/robes; budget to ~2-4 ms.</li><li><strong>Rule:</strong> secondary motion must never affect gameplay (no collision with hitboxes) and must be</li></ul>
+<p>cheap on remote players (LOD out beyond N meters).</p>
+<h3 id="3-10-emote-system">3.10 Emote system</h3>
+<p>An emote is an <strong>authorable clip + a layer/mask decision + an interruption policy + a state ID</strong>.</p>
+<p><strong>Two classes:</strong></p>
+<table><thead><tr><th>Class</th><th>Mask</th><th>Locomotion</th><th>Allowed when</th></tr></thead><tbody><tr><td>Full-body (dance, sit, kneel)</td><td>full body</td><td>suspended</td><td>stationary, social spaces, on ground</td></tr><tr><td>Upper-body (wave, salute, point)</td><td>spine+arms+head</td><td>continues</td><td>almost anywhere on ground</td></tr></tbody></table>
+<p><strong>State machine integration:</strong></p>
+<pre><code>EMOTE state:
+  entry conditions:
+    - emote requested AND emotes_enabled (not in combat lock / not airborne)
+    - emote priority &gt; current state priority
+  during:
+    - play clip on emote layer (mask per class)
+    - loop if loopable (dance), else hold last frame / return
+  exit conditions (ANY):
+    - fire / reload / ADS pressed      -&gt; cancel, restore weapon state
+    - movement input beyond threshold  -&gt; cancel full-body; upper-body may persist
+    - damage taken                     -&gt; cancel (combat overrides social)
+    - emote pressed again              -&gt; cancel (toggle)</code></pre>
+<p><strong>Priority table (higher cancels lower):</strong></p>
+<pre><code>  100  death / stagger
+   90  damage flinch
+   80  reload / weapon action
+   70  fire / ADS
+   50  full-body emote
+   40  upper-body emote
+   10  idle fidget / inspect</code></pre>
+<p><strong>Networked as state, not animation:</strong> replicate <code>(player_id, emote_id, start_time)</code>. Each client plays its own local clip. The server never trusts a client-supplied <em>pose</em>; only the emote <em>id</em> and the fact it is playing. This is why remote animation can't be spoofed into a hitbox change.</p>
+<p><strong>Data model per emote:</strong></p>
+<pre><code>emote_def {
+  id            : uint32        // from game definition
+  clip_ref      : clip_handle   // resolved at runtime from the user&#x27;s install
+  mask          : FULL | UPPER
+  loop          : bool
+  priority      : int
+  allow_air     : bool
+  allow_move    : bool
+  cancel_on_fire: bool (true)
+  sfx_ref, vfx_ref
+}</code></pre>
+<h3 id="3-11-input-command-layer">3.11 Input command layer</h3>
+<p>Input is a <strong>thin command layer</strong>. Buttons do not play animations; they enqueue <strong>commands</strong> that the state machine consumes.</p>
+<pre><code>raw input (device)
+   -&gt; binding map (button -&gt; action)
+   -&gt; command queue (edge/held/released, buffered)
+   -&gt; gameplay state machine (consumes commands, validates)
+   -&gt; animation graph (selects clips/states)
+   -&gt; notifies (apply gameplay effects)</code></pre>
+<p><strong>Command buffering (critical for feel):</strong> buffer inputs for a short window (~0.15-0.25 s) so a reload pressed just before the current fire finishes still registers. This is why Destiny feels "forgiving." Implement as a per-action timestamp; consume if <code>now - pressed_at &lt;= buffer_window</code>.</p>
+<p><strong>Edge vs held:</strong> <code>fire</code> is edge (semi-auto) or held (auto) depending on archetype. <code>ADS</code> is held. <code>reload</code> is edge. <code>emote</code> is edge.</p>
+<p><strong>Input -&gt; state examples (hand cannon):</strong></p>
+<pre><code>on fire_pressed:
+  if state == IDLE and ammo &gt; 0:      -&gt; FIRE, emit fire notify, ammo -= 1
+  if state == ADS  and ammo &gt; 0:      -&gt; ADS_FIRE
+  if ammo == 0:                       -&gt; trigger auto-reload (or dry-fire click)
+on reload_pressed:
+  if state in {IDLE, ADS} and ammo &lt; capacity and spare_ammo &gt; 0: -&gt; RELOAD
+on ads_pressed (held):
+  if state in {IDLE, FIRE}:           -&gt; ADS</code></pre>
+<h3 id="3-12-networking-prediction-authority-replication">3.12 Networking: prediction, authority, replication</h3>
+<ul><li><strong>Client predicts</strong> locally: play the animation immediately, apply cosmetic + tentative gameplay</li></ul>
+<p>effects. Feels instant.</p>
+<ul><li><strong>Server is authoritative</strong>: validates the gameplay effect (did the mag refill? did the shot</li></ul>
+<p>land?). On mismatch, correct the client (rollback/replay or a snap).</p>
+<ul><li><strong>Animation is generally NOT networked frame-by-frame.</strong> You replicate <strong>state</strong>:</li></ul>
+<p><code>weapon_state</code>, <code>emote_id</code>, <code>ammo</code>, <code>reload_start_time</code>. Remote clients <em>re-simulate</em> the animation from that state.</p>
+<ul><li><strong>Interpolation buffers</strong> smooth remote actors (render ~100 ms in the past) so packet jitter</li></ul>
+<p>doesn't stutter their animation.</p>
+<ul><li><strong>Determinism:</strong> notifies that affect gameplay must be reproducible from replicated state +</li></ul>
+<p>time. Use server time as the single source of truth for <code>reload_start_time</code> etc.</p>
+<p><strong>Replication payload sketch:</strong></p>
+<pre><code>PlayerAnimState (replicated, ~16-24 bytes):
+  uint8   weapon_state_id
+  uint8   emote_id
+  uint16  emote_flags
+  float   state_start_time   // server clock
+  uint8   ammo
+  uint8   aim_state          // hip/ads blend quantized</code></pre>
+<hr />
+<h2 id="4-data-definition-pipeline-sunrise-context">4. Data &amp; definition pipeline (Sunrise context)</h2>
+<p>The engine that ships Destiny 2 ("Tiger") stores almost everything as <strong>tagged definition objects</strong> in package files. Characters, animation sets, weapons, and emote definitions are all tagged data, not hard-coded logic. Sunrise's job is to <em>read</em> that data at runtime and drive its own systems from it.</p>
+<h3 id="4-1-the-extraction-path">4.1 The extraction path</h3>
+<pre><code>user&#x27;s game install (own copy, legacy build)
+   |
+   v
+package files (.pkg)  --&gt;  tag container parser
+   |                         (tiger-pkg / alkahest / tachyscope / D2TagParser ...)
+   v
+typed tag objects (definitions)  --&gt;  Sunrise data model (structs)
+   |                                    (Sunrise/src/state/content, build_data, ...)
+   v
+runtime systems (Sunrise/src/client/player, movement, input, hooks)
+   |
+   v
+render / gameplay</code></pre>
+<p><strong>Project rules applied to animation data:</strong></p>
+<ul><li><strong>Read at runtime.</strong> Never bake animation clips, meshes, or definition binaries into the repo</li></ul>
+<p>or the release. Parse from the user's install each session (cache in memory, optionally in a local user-owned cache dir - never committed).</p>
+<ul><li><strong>No copyrighted assets.</strong> Skeleton/mesh/clip <em>references</em> are handles resolved against the</li></ul>
+<p>user's install; the bytes stay on the user's disk.</p>
+<ul><li><strong>Server focus.</strong> Where a feature belongs to the server (authority, state), route it through</li></ul>
+<p>the server layer rather than a client patch. Client patches only for presentation.</p>
+<h3 id="4-2-animation-relevant-definition-taxonomy">4.2 Animation-relevant definition taxonomy</h3>
+<p>The exact tag names are version/build specific; the <em>categories</em> to look for are stable:</p>
+<table><thead><tr><th>Category</th><th>What it gives you</th><th>Used for</th></tr></thead><tbody><tr><td><strong>Animation set / state graph def</strong></td><td>States, transitions, blend params</td><td>Build the runtime graph</td></tr><tr><td><strong>Animation clip / sequence def</strong></td><td>Clip ref, fps, loop, notify list</td><td>Clip playback + notifies</td></tr><tr><td><strong>Skeleton / rig def</strong></td><td>Joint hierarchy, names, bind transforms</td><td>Rig construction</td></tr><tr><td><strong>Render model / mesh def</strong></td><td>Skinned mesh, material, bone map</td><td>Skinning</td></tr><tr><td><strong>Socket / attachment def</strong></td><td>Named attach points + offsets</td><td>Grip/muzzle/effects</td></tr><tr><td><strong>Weapon def</strong></td><td>Archetype, ammo, fire rate, reload timings</td><td>Weapon state machine params</td></tr><tr><td><strong>Emote def</strong></td><td>Clip ref, mask, loop, flags</td><td>Emote system</td></tr><tr><td><strong>Movement/character physics def</strong></td><td>Speeds, accel, jump, air control</td><td>Locomotion blend inputs</td></tr><tr><td><strong>Damage/impact def</strong></td><td>Flinch magnitudes</td><td>Additive flinch layer</td></tr></tbody></table>
+<p><strong>Recon tip:</strong> when you find a def, dump its fields to a readable form (JSON-ish) and diff across weapons/characters. Patterns (e.g. "every weapon has a reload_time and a mag_size") reveal the schema faster than reading the binary parser.</p>
+<h3 id="4-3-runtime-consumption-model">4.3 Runtime consumption model</h3>
+<p>Keep a clean separation:</p>
+<pre><code>[Content layer]   parsed defs, immutable, versioned, user-owned
+      |  (build a read-only registry keyed by tag id)
+      v
+[Gameplay layer]  state machines, ammo, timers  (server-authoritative where relevant)
+      |
+      v
+[Presentation]    graph evaluation, springs, IK, notifies -&gt; render</code></pre>
+<ul><li><strong>Defs are data, not code.</strong> A new weapon/emote should be <em>added by data</em>, not a new branch in</li></ul>
+<p>a switch. If you find yourself special-casing an archetype in code, you probably missed a field.</p>
+<ul><li><strong>Handles, not pointers into game memory</strong>, where possible: resolve to stable ids so a</li></ul>
+<p>reload/rollback doesn't dangle.</p>
+<ul><li><strong>Version-guard</strong> parsed schemas; a build bump can change field layout.</li></ul>
+<h3 id="4-4-what-you-can-implement-without-any-asset-data">4.4 What you can implement without any asset data</h3>
+<p>You can build and test the <em>entire</em> animation architecture with <strong>placeholder clips</strong> (a cube on a joint chain) because the architecture is data-agnostic. Only the final look needs the real clips. This is how you de-risk: get the systems right against synthetic data, then bind real defs. It also keeps the repo asset-free.</p>
+<hr />
+<h2 id="5-exact-production-workflow">5. Exact production workflow</h2>
+<p>A phased plan with <strong>gates</strong>. Do not start a phase until the previous gate passes. Each phase lists: inputs, tasks, artifacts, and the <strong>Definition of Done (DoD)</strong>. Times are for a 2-3 person team (engineer + tech animator), compressed if solo.</p>
+<h3 id="phase-0-recon-instrumentation-3-5-days">Phase 0 - Recon &amp; instrumentation  (3-5 days)</h3>
+<p><strong>Inputs:</strong> user's own install, existing Sunrise tag parsers, a debugger, a build that boots offline.</p>
+<p><strong>Tasks:</strong></p>
+<ol><li>Enumerate animation-relevant defs (§4.2). Dump to JSON; count and categorize.</li><li>Identify the skeleton(s) and socket lists for a test character + a hand cannon.</li><li>Build a <strong>runtime inspector overlay</strong> (ImGui is already vendored): show current state, current</li></ol>
+<p>clip, clip time, active notifies, ammo, aim scalar, and spring values, live.</p>
+<ol><li>Log one full reload + one emote end-to-end (timestamps of every notify).</li></ol>
+<p><strong>Artifacts:</strong> <code>recon/anim-defs.json</code> (generated locally, <strong>not committed</strong>), a one-page schema map, inspector overlay, a captured event log.</p>
+<p><strong>DoD (gate 0):</strong></p>
+<ul><li><input type="checkbox" disabled /> We can list every state of a weapon's animation graph by name.</li><li><input type="checkbox" disabled /> We can see, live, which clip is playing and its normalized time.</li><li><input type="checkbox" disabled /> We can reproduce a reload's notify timings from a log, within +/- 1 frame.</li></ul>
+<h3 id="phase-1-data-model-registry-4-6-days">Phase 1 - Data model &amp; registry  (4-6 days)</h3>
+<p><strong>Tasks:</strong></p>
+<ol><li>Define C++ structs mirroring §4.2 categories. Keep them POD-ish and versioned.</li><li>Build a read-only registry keyed by tag id with lazy resolution.</li><li>Write a <strong>schema-version guard</strong> and a graceful "unknown def" path (never crash on a new build).</li><li>Unit-test the parser against recorded dumps (fixtures live in the user's cache, not the repo).</li></ol>
+<p><strong>DoD (gate 1):</strong></p>
+<ul><li><input type="checkbox" disabled /> Given a weapon def id, code returns archetype, ammo, fire interval, reload time.</li><li><input type="checkbox" disabled /> Given an emote def id, code returns mask, loop, priority, flags.</li><li><input type="checkbox" disabled /> Registry is immutable after load; no gameplay code holds raw game-memory pointers.</li></ul>
+<h3 id="phase-2-state-machine-core-5-8-days">Phase 2 - State machine core  (5-8 days)</h3>
+<p><strong>Tasks:</strong></p>
+<ol><li>Implement the generic <strong>hierarchical state machine</strong> (states, transitions, conditions,</li></ol>
+<p>priorities, sync groups).</p>
+<ol><li>Implement <strong>clip playback + notify dispatch</strong> on the animation clock (§2.1).</li><li>Implement <strong>command queue + buffering</strong> (§3.11).</li><li>Wire an <strong>event bus</strong>: state entered/exited, notify fired, command consumed.</li></ol>
+<p><strong>DoD (gate 2):</strong></p>
+<ul><li><input type="checkbox" disabled /> A synthetic weapon (placeholder clip) transitions IDLE-&gt;FIRE-&gt;IDLE and IDLE-&gt;RELOAD-&gt;IDLE</li></ul>
+<p>with correct notify firing.</p>
+<ul><li><input type="checkbox" disabled /> Buffered reload within the window registers and plays after the current fire.</li><li><input type="checkbox" disabled /> Emote priority correctly cancels/gets-cancelled by combat states (§3.10 table).</li></ul>
+<h3 id="phase-3-hand-cannon-vertical-slice-8-12-days">Phase 3 - Hand-cannon vertical slice  (8-12 days)</h3>
+<p>The <strong>first real content</strong>. Do one archetype end-to-end before generalizing.</p>
+<p><strong>Tasks:</strong></p>
+<ol><li>Bind a real hand-cannon def: fire interval, mag size, reload time, spread, recoil params.</li><li>Author/derive the reload notify timeline (§3.5) and wire gameplay effects to notifies.</li><li>Implement the <strong>additive recoil spring</strong> (§3.6) on camera + weapon with the tuning table.</li><li>Implement <strong>muzzle convergence</strong>, aim punch, and dry-fire.</li><li>Implement <strong>ADS blend</strong> (§3.7) with the aim scalar.</li></ol>
+<p><strong>DoD (gate 3):</strong></p>
+<ul><li><input type="checkbox" disabled /> Reload refills the mag at the <code>ammo_refill</code> notify, not at clip end.</li><li><input type="checkbox" disabled /> Interrupting a reload at any time leaves ammo in the correct state (no duplication/dupe bug).</li><li><input type="checkbox" disabled /> Recoil is spring-recovered; holding fire produces a readable, controllable climb.</li><li><input type="checkbox" disabled /> ADS blend has no pop; FOV and weapon pose move together.</li><li><input type="checkbox" disabled /> All tuning constants are <strong>data-driven</strong> (a config), not literals in code.</li></ul>
+<h3 id="phase-4-procedural-overlays-5-7-days">Phase 4 - Procedural overlays  (5-7 days)</h3>
+<p><strong>Tasks:</strong></p>
+<ol><li>Breathing + movement sway/bob springs (§3.7).</li><li>Landing/impact impulses.</li><li>Flinch additive layer driven by damage defs.</li><li>Secondary motion spring bones on straps/cables (§3.9), LOD'd for remote players.</li></ol>
+<p><strong>DoD (gate 4):</strong></p>
+<ul><li><input type="checkbox" disabled /> Reticle is never perfectly still; sway amplitude scales with ADS.</li><li><input type="checkbox" disabled /> Turning/strafe visibly lags the viewmodel then settles.</li><li><input type="checkbox" disabled /> Secondary motion is disabled/cheap beyond N meters and never affects hitboxes.</li></ul>
+<h3 id="phase-5-emote-system-4-6-days">Phase 5 - Emote system  (4-6 days)</h3>
+<p><strong>Tasks:</strong></p>
+<ol><li>Emote def registry + state machine integration (§3.10).</li><li>Full-body vs upper-body masks; loop + hold-last behavior.</li><li>Interruption policy + priority table; toggle-cancel.</li><li>Wheel/menu binding (data-driven list, not hard-coded).</li></ol>
+<p><strong>DoD (gate 5):</strong></p>
+<ul><li><input type="checkbox" disabled /> Full-body emote suspends locomotion; upper-body emote coexists with walking.</li><li><input type="checkbox" disabled /> Fire/damage/move cancel correctly per the priority table.</li><li><input type="checkbox" disabled /> Adding a new emote requires <strong>data only</strong>.</li></ul>
+<h3 id="phase-6-input-replication-6-9-days">Phase 6 - Input + replication  (6-9 days)</h3>
+<p><strong>Tasks:</strong></p>
+<ol><li>Finalize the command layer (§3.11) with rebindable actions.</li><li>Implement <code>PlayerAnimState</code> replication (§3.12); route authority through the server layer.</li><li>Prediction + correction for local player; interpolation for remote players.</li><li>Deterministic notifies from replicated state + server time.</li></ol>
+<p><strong>DoD (gate 6):</strong></p>
+<ul><li><input type="checkbox" disabled /> Remote players' reloads/emotes play from replicated state, not streamed frames.</li><li><input type="checkbox" disabled /> Local actions feel instant (predicted) and correct on server mismatch.</li><li><input type="checkbox" disabled /> No animation-driven gameplay effect can be spoofed by a client.</li></ul>
+<h3 id="phase-7-tuning-tools-qa-ongoing">Phase 7 - Tuning tools &amp; QA  (ongoing)</h3>
+<p><strong>Tasks:</strong></p>
+<ol><li><strong>Live tuning panel</strong> (ImGui): edit every constant in §6 live, hot-reload from config.</li><li><strong>Recorder/replayer</strong> for input sequences (regression tests for feel).</li><li><strong>Feel validation harness</strong> (§8): fixed input scripts -&gt; captured outputs -&gt; diffs.</li></ol>
+<p><strong>DoD (gate 7):</strong></p>
+<ul><li><input type="checkbox" disabled /> A designer can tune recoil/ADS/sway without a rebuild.</li><li><input type="checkbox" disabled /> A recorded input script replays identically across runs (within tolerance).</li><li><input type="checkbox" disabled /> CI runs the headless feel harness on synthetic data.</li></ul>
+<h3 id="5-9-cross-phase-definition-of-done-applies-to-every-pr">5.9 Cross-phase Definition of Done (applies to every PR)</h3>
+<ul><li><input type="checkbox" disabled /> <strong>One feature per PR</strong> (project rule).</li><li><input type="checkbox" disabled /> Feature is <strong>complete</strong> - no non-functional stubs (project rule).</li><li><input type="checkbox" disabled /> Data-driven; no magic numbers in logic.</li><li><input type="checkbox" disabled /> No copyrighted data committed; runtime extraction only.</li><li><input type="checkbox" disabled /> Clang-format / clang-tidy clean; follows existing comment/doc style.</li><li><input type="checkbox" disabled /> PR description explains <em>what</em>, <em>why</em>, and <em>effects in detail</em>.</li><li><input type="checkbox" disabled /> Server-authoritative where gameplay truth is involved; client patch only for presentation.</li><li><input type="checkbox" disabled /> Inspector overlay updated to expose the new state.</li></ul>
+<hr />
+<h2 id="6-conventions-naming-curves-tuning-knobs-budgets">6. Conventions: naming, curves, tuning knobs, budgets</h2>
+<h3 id="6-1-clip-naming">6.1 Clip naming</h3>
+<pre><code>&lt;archetype&gt;_&lt;state&gt;_&lt;variant&gt;_&lt;dir&gt;
+  hc_reload_full_a            // hand cannon, full reload, variant a
+  hc_fire_a
+  hc_ads_in / hc_ads_loop / hc_ads_out
+  rifle_reload_tactical_a
+  emote_dance_loop_a
+  locomotion_run_fwd</code></pre>
+<h3 id="6-2-animation-curve-channels-drive-procedural-systems-from-the-clip">6.2 Animation curve channels (drive procedural systems from the clip)</h3>
+<p>Use named curves on clips to author procedural behavior in the graph:</p>
+<table><thead><tr><th>Curve</th><th>Purpose</th></tr></thead><tbody><tr><td><code>recoil_alpha</code></td><td>how much recoil applies this frame of the fire clip</td></tr><tr><td><code>hand_ik_alpha</code></td><td>1 = hard-lock hand to grip, 0 = free</td></tr><tr><td><code>weapon_attach_alpha</code></td><td>weapon parented vs free (reload can detach)</td></tr><tr><td><code>sway_scale</code></td><td>local sway multiplier (e.g. lower during ADS)</td></tr><tr><td><code>mag_attach</code></td><td>1 = mag attached to weapon, 0 = held in hand / world</td></tr></tbody></table>
+<h3 id="6-3-central-tuning-config-data-driven">6.3 Central tuning config (data-driven)</h3>
+<pre><code class="language-jsonc">{
+  &quot;recoil&quot;: {
+    &quot;frequency_hz&quot;: 9.0,
+    &quot;damping_ratio&quot;: 1.0,
+    &quot;pitch_deg&quot;: -2.4,
+    &quot;yaw_deg&quot;: 0.35,
+    &quot;cam_weapon_split&quot;: 0.6,
+    &quot;recovery_hold_s&quot;: 0.12
+  },
+  &quot;ads&quot;: { &quot;fov_hip&quot;: 90.0, &quot;fov_aim&quot;: 55.0, &quot;in_s&quot;: 0.18, &quot;out_s&quot;: 0.14 },
+  &quot;sway&quot;: { &quot;breath_hz&quot;: 0.25, &quot;breath_amp_deg&quot;: 0.6, &quot;ads_scale&quot;: 0.35 },
+  &quot;input&quot;: { &quot;buffer_window_s&quot;: 0.20 }
+}</code></pre>
+<h3 id="6-4-budgets-per-frame-pc-mid-tier">6.4 Budgets (per frame, PC mid-tier)</h3>
+<table><thead><tr><th>System</th><th>Budget</th></tr></thead><tbody><tr><td>Base + weapon graph eval (local)</td><td>&lt; 0.4 ms</td></tr><tr><td>Additive overlays + springs</td><td>&lt; 0.2 ms</td></tr><tr><td>IK (hands + feet)</td><td>&lt; 0.3 ms</td></tr><tr><td>Secondary motion (local)</td><td>&lt; 0.5 ms</td></tr><tr><td>Remote character anim (each, LOD0)</td><td>&lt; 0.3 ms</td></tr><tr><td>Total animation (typical scene)</td><td>&lt; 4 ms</td></tr></tbody></table>
+<hr />
+<h2 id="7-performance-profiling">7. Performance &amp; profiling</h2>
+<ul><li><strong>Profile first.</strong> Use the platform profiler; measure graph eval, skinning, IK separately.</li><li><strong>LOD animation:</strong> distant characters sample at 15-30 Hz and skip IK/secondary motion.</li><li><strong>Update rate scaling:</strong> run springs at fixed sub-steps if dt spikes; clamp dt to &lt;= 33 ms to</li></ul>
+<p>avoid spring explosion.</p>
+<ul><li><strong>Budget for remote players:</strong> animation cost scales with player count; cap detail by distance.</li><li><strong>Avoid per-frame allocation</strong> in graph/spring code (hot path).</li><li><strong>Skinning:</strong> GPU skinning for high counts; keep bone counts sane (~60-120 for a character).</li></ul>
+<hr />
+<h2 id="8-qa-feel-validation-harness">8. QA / feel validation harness</h2>
+<p>Feel is testable if you define it as <strong>captured output for fixed input</strong>.</p>
+<h3 id="8-1-deterministic-input-scripts">8.1 Deterministic input scripts</h3>
+<p>Record an input timeline (buttons + look deltas + dt), replay it, and capture:</p>
+<ul><li>state transitions (with frame timestamps),</li><li>notify firings,</li><li>spring values per frame,</li><li>final camera/weapon transforms.</li></ul>
+<p>Store as golden files (synthetic/placeholder data only, safe to commit).</p>
+<h3 id="8-2-invariants-to-assert-unit-regression-tests">8.2 Invariants to assert (unit/regression tests)</h3>
+<pre><code>- reload: after ammo_refill notify, mag == capacity ; before, mag == previous
+- interrupt: canceling reload before ammo_refill leaves mag unchanged
+- no-dupe: firing during reload never consumes ammo
+- buffer: reload pressed within window always plays after current action
+- emote: full-body emote never coexists with locomotion displacement &gt; epsilon
+- priority: damage always cancels any emote
+- determinism: same input script =&gt; same transition sequence (within frame tolerance)</code></pre>
+<h3 id="8-3-feel-metrics-quantitative">8.3 Feel metrics (quantitative)</h3>
+<table><thead><tr><th>Metric</th><th>Target</th></tr></thead><tbody><tr><td>Input-to-first-frame-of-anim latency</td><td>&lt; 1 frame (predicted)</td></tr><tr><td>ADS full-blend time</td><td>0.14-0.20 s</td></tr><tr><td>Recoil settle to &lt;5%</td><td>0.35-0.55 s</td></tr><tr><td>Reload cancel responsiveness</td><td>immediate</td></tr><tr><td>Reticle max deviation at rest (sway)</td><td>0.4-1.0 deg</td></tr></tbody></table>
+<hr />
+<h2 id="9-agent-prompt-library-lead-dev-level">9. Agent prompt library (lead-dev level)</h2>
+<p>These are <strong>ready-to-paste prompts</strong> for a coding agent working in the Sunrise repo. Each has: role, context, inputs, constraints, deliverable, and acceptance criteria. The shared preamble below is assumed prepended to every prompt.</p>
+<h3 id="9-0-shared-preamble-prepend-to-all-prompts">9.0 Shared preamble (prepend to all prompts)</h3>
+<pre><code>ROLE
+You are a senior gameplay/engine engineer working in the &quot;Sunrise&quot; C++20 codebase
+(Destiny 2 offline-preservation mod). You write production-quality, data-driven,
+server-authoritative-where-relevant code that follows the repo&#x27;s clang-format,
+clang-tidy, and comment style. C++20, CMake, Windows/MSVC primary, Linux cross-build.
+
+HARD CONSTRAINTS
+- No copyrighted game data in the repo or release. Read game data at runtime from the
+  user&#x27;s own install only. Never commit clips/meshes/def binaries.
+- No live-server targeting, no anti-cheat circumvention. Offline legacy build only.
+- One feature per PR. Complete implementations only - no non-functional stubs.
+- No magic numbers in logic: all tuning values come from a data-driven config.
+- Client patches only for presentation; gameplay truth routes through the server layer.
+- Keep the hot path allocation-free.
+
+REPO MAP (use these)
+- Sunrise/src/state/content, build_data, content_manifest  -&gt; parsed defs / registry
+- Sunrise/src/client/player, movement, input, hooks        -&gt; runtime presentation
+- Sunrise/src/server/gameplay, activity                    -&gt; authority
+- Sunrise/src/core/ui (ImGui vendored)                     -&gt; debug overlays
+
+OUTPUT FORMAT
+1) A short design note (what/why/effects, per repo PR rules).
+2) The code as focused diffs/files.
+3) Tests + how to run them.
+4) A checklist of the acceptance criteria, each marked pass/fail with evidence.
+Ask clarifying questions ONLY if a required input is genuinely missing.</code></pre>
+<h3 id="9-1-prompt-recon-def-enumeration">9.1 Prompt - Recon / def enumeration</h3>
+<pre><code>TASK: Build a read-only animation-definition recon tool.
+- Add a debug command that walks the parsed content registry and dumps every def whose
+  category is in {animation set, animation clip/sequence, skeleton/rig, render model,
+  socket/attachment, weapon, emote, movement/character physics, damage/impact}.
+- Emit a stable, diffable JSON (sorted keys) to a user-owned cache dir. Do NOT commit it.
+- Include: tag id, category, name, and all scalar fields; mark nested refs as ids.
+- Fail soft: unknown/opaque defs are logged and skipped, never crash.
+ACCEPTANCE:
+- Running it on the user&#x27;s install produces a categorized JSON with counts per category.
+- Zero repo files contain extracted data (verify with git status).
+- Schema is version-stamped; a build bump logs a clear mismatch warning.</code></pre>
+<h3 id="9-2-prompt-data-model-registry">9.2 Prompt - Data model + registry</h3>
+<pre><code>TASK: Implement versioned POD structs + an immutable registry for animation-relevant defs.
+- Structs: WeaponDef, EmoteDef, AnimSetDef, AnimClipDef, SkeletonDef, SocketDef,
+  MovementDef, ImpactDef. Fields per the recon output; version-stamp each.
+- Registry: load-once, immutable, keyed by tag id, lazy nested resolution.
+- Provide typed accessors: archetype/ammo/fire_interval/reload_time for weapons;
+  mask/loop/priority/flags for emotes.
+- No raw game-memory pointers escape the content layer; use stable ids/handles.
+- Unit tests using recorded JSON fixtures from the user cache (not committed).
+ACCEPTANCE:
+- WeaponDef lookup returns correct values for &gt;=3 sample weapons.
+- EmoteDef lookup returns mask/loop/priority for &gt;=3 sample emotes.
+- Registry has no mutators after load; ASan/UBSan clean on tests.</code></pre>
+<h3 id="9-3-prompt-hierarchical-state-machine-core">9.3 Prompt - Hierarchical state machine core</h3>
+<pre><code>TASK: Implement a generic hierarchical state machine + clip playback + notify dispatch.
+- States: id, parent, on_enter/on_exit, transitions (condition predicates), priority,
+  sync_group (leader/follower normalized time).
+- Clip playback on the animation clock; fire notifies once per crossing; support loop.
+- Notify kinds: GAMEPLAY (replicated, deterministic) vs COSMETIC (may be skipped on LOD).
+- Command queue with per-action buffering (window from config, default 0.20 s).
+- Event bus: state_entered/exited, notify_fired, command_consumed.
+ACCEPTANCE:
+- Synthetic weapon transitions IDLE-&gt;FIRE-&gt;IDLE and IDLE-&gt;RELOAD-&gt;IDLE; notifies fire once.
+- Buffered reload within window plays after the current action.
+- Emote priority cancels/gets-cancelled per the priority table.
+- Determinism test: same input timeline =&gt; identical transition sequence.</code></pre>
+<h3 id="9-4-prompt-hand-cannon-vertical-slice">9.4 Prompt - Hand-cannon vertical slice</h3>
+<pre><code>TASK: Implement one hand-cannon end-to-end, data-driven.
+- Bind real defs: fire interval, mag size, reload time, spread, recoil params.
+- Reload notify timeline: reload_begin, mag_eject, mag_insert, ammo_refill,
+  chamber_round, reload_end. Gameplay truth ONLY on notifies, never on clip end.
+- Interrupt handling: canceling before ammo_refill leaves mag unchanged (no dupe).
+- Dry-fire when ammo==0; auto-reload option from config.
+ACCEPTANCE:
+- ammo_refill (not clip end) sets mag to capacity.
+- Cancel at every phase leaves ammo correct; fire-during-reload consumes nothing.
+- All constants come from config; changing config changes behavior with no rebuild.
+- Inspector overlay shows weapon_state, clip, clip time, ammo, active notifies.</code></pre>
+<h3 id="9-5-prompt-additive-recoil-spring">9.5 Prompt - Additive recoil spring</h3>
+<pre><code>TASK: Implement additive, critically-damped recoil for camera + weapon.
+- Per-axis state (pitch/yaw/kick): x, v. Update: a=-k*x-c*v; v+=a*dt; x+=v*dt.
+  omega=2*pi*f; k=omega^2; c=2*zeta*omega.
+- On FIRE: v += impulse * omega; set recovery_hold timer (default 0.12 s); spring idles
+  during hold so the kick is readable first.
+- Split impulse between camera and weapon by config (default 60/40).
+- Add muzzle convergence: lerp aim dir toward muzzle dir (tau ~0.08 s).
+- Separate aim punch (non-recoverable) from recoverable spring.
+- Clamp dt to &lt;= 33 ms; fixed sub-step if needed. Allocation-free update.
+ACCEPTANCE:
+- Holding fire yields readable, controllable climb that settles in 0.35-0.55 s.
+- No spring explosion on dt spikes (verified with a 200 ms frame injection).
+- All params live in config; a live overlay can edit them.</code></pre>
+<h3 id="9-6-prompt-sway-breathing-ads">9.6 Prompt - Sway / breathing / ADS</h3>
+<pre><code>TASK: Implement sway, breathing, landing impulse, and ADS blend.
+- Breathing: 2-3 sine/noise terms (0.15-0.4 Hz) added to camera+arms; scale by config.
+- Sway/bob from velocity + turn rate; viewmodel lags camera via spring (distinct from recoil).
+- Landing: downward camera impulse + weapon dip, spring-recovered.
+- ADS: single aim scalar 0..1 via smoothstep; drives FOV lerp, weapon aim pose,
+  sway multiplier, reticle visibility. Asymmetric in/out times (0.18/0.14 s).
+ACCEPTANCE:
+- Reticle never perfectly still; sway amplitude scales down while ADS.
+- Turning/strafe visibly lags the viewmodel then settles.
+- ADS blend has no pop; FOV and weapon pose are synchronized.</code></pre>
+<h3 id="9-7-prompt-ik-secondary-motion">9.7 Prompt - IK &amp; secondary motion</h3>
+<pre><code>TASK: Implement hand/foot IK and spring-bone secondary motion.
+- Two-bone analytic IK for hands to weapon grip sockets; run AFTER additive layers.
+- Foot IK via ground raycast; blend height/rotation; clamp per-frame delta (no pop).
+- Spring bones (verlet or explicit) for straps/cables/antennae with stiffness/damping/
+  gravity/drag from config; LOD out beyond N meters; never affect hitboxes.
+ACCEPTANCE:
+- Hands stay on grips under max recoil (no visible slip).
+- Feet conform to slopes; no popping on stairs.
+- Secondary motion disabled beyond LOD distance and has zero gameplay effect.</code></pre>
+<h3 id="9-8-prompt-emote-system">9.8 Prompt - Emote system</h3>
+<pre><code>TASK: Implement the emote system per section 3.10.
+- EmoteDef registry: id, clip_ref, mask (FULL/UPPER), loop, priority, allow_air,
+  allow_move, cancel_on_fire, sfx/vfx refs.
+- State integration with the priority table; toggle-cancel; hold-last vs loop.
+- Full-body suspends locomotion; upper-body coexists with walking.
+- Data-driven emote list for the wheel/menu (no hard-coded entries).
+ACCEPTANCE:
+- Full-body emote blocks locomotion displacement; upper-body does not.
+- Fire/damage/move cancel per priority; damage always wins.
+- Adding a new emote requires data only (no code change).</code></pre>
+<h3 id="9-9-prompt-input-command-layer-replication">9.9 Prompt - Input command layer + replication</h3>
+<pre><code>TASK: Finalize input command layer and replicate animation state.
+- Rebindable actions; edge vs held semantics per archetype; buffered commands.
+- PlayerAnimState replication: weapon_state_id, emote_id, emote_flags, state_start_time
+  (server clock), ammo, quantized aim_state. Route authority through the server layer.
+- Local prediction + correction; remote interpolation (~100 ms buffer).
+- Deterministic notifies computed from replicated state + server time.
+ACCEPTANCE:
+- Remote reloads/emotes play from replicated state, not streamed frames.
+- Local actions feel instant; mismatch triggers a correct rollback/snap.
+- No client-supplied pose/effect is trusted; spoofing is impossible.</code></pre>
+<h3 id="9-10-prompt-live-tuning-feel-harness">9.10 Prompt - Live tuning + feel harness</h3>
+<pre><code>TASK: Build live tuning + a deterministic feel harness.
+- ImGui panel to edit every constant in section 6.3 live, hot-reload from config.
+- Recorder/replayer for input timelines (buttons + look deltas + dt).
+- Harness: replay script -&gt; capture transitions/notifies/springs/transforms -&gt; golden diff.
+- Assert the invariants in section 8.2; report metrics from section 8.3.
+ACCEPTANCE:
+- A designer can tune recoil/ADS/sway without a rebuild.
+- A recorded script replays identically across runs (within frame tolerance).
+- Harness runs headless in CI on synthetic data; no copyrighted data committed.</code></pre>
+<hr />
+<h2 id="10-appendices">10. Appendices</h2>
+<h3 id="10-a-consolidated-tuning-table-starting-points">10.A Consolidated tuning table (starting points)</h3>
+<table><thead><tr><th>System</th><th>Constant</th><th>Start</th><th>Range</th><th>Notes</th></tr></thead><tbody><tr><td>Recoil</td><td>frequency_hz</td><td>9.0</td><td>6-14</td><td>higher = snappier</td></tr><tr><td>Recoil</td><td>damping_ratio</td><td>1.0</td><td>0.7-1.0</td><td>&lt;1 adds bounce</td></tr><tr><td>Recoil</td><td>pitch_deg</td><td>-2.4</td><td>-1.5..-4.0</td><td>hand cannon</td></tr><tr><td>Recoil</td><td>yaw_deg</td><td>0.35</td><td>0.1-0.7</td><td>randomized</td></tr><tr><td>Recoil</td><td>cam_weapon_split</td><td>0.6</td><td>0.4-0.8</td><td>camera share</td></tr><tr><td>Recoil</td><td>recovery_hold_s</td><td>0.12</td><td>0.05-0.25</td><td>readability</td></tr><tr><td>ADS</td><td>in_s / out_s</td><td>0.18 / 0.14</td><td>-</td><td>asymmetric</td></tr><tr><td>ADS</td><td>fov_hip / fov_aim</td><td>90 / 55</td><td>-</td><td>deg</td></tr><tr><td>Sway</td><td>breath_hz</td><td>0.25</td><td>0.15-0.4</td><td>-</td></tr><tr><td>Sway</td><td>breath_amp_deg</td><td>0.6</td><td>0.3-1.2</td><td>-</td></tr><tr><td>Sway</td><td>ads_scale</td><td>0.35</td><td>0.2-0.5</td><td>-</td></tr><tr><td>Input</td><td>buffer_window_s</td><td>0.20</td><td>0.15-0.25</td><td>forgiveness</td></tr><tr><td>IK</td><td>two_bone_iters</td><td>2</td><td>1-2</td><td>analytic</td></tr><tr><td>Secondary</td><td>stiffness</td><td>0.35</td><td>-</td><td>spring bones</td></tr><tr><td>Secondary</td><td>damping</td><td>0.15</td><td>-</td><td>spring bones</td></tr></tbody></table>
+<h3 id="10-b-glossary">10.B Glossary</h3>
+<ul><li><strong>Blend space / blend tree</strong> - weighted mix of clips driven by continuous inputs.</li><li><strong>Additive layer</strong> - a delta pose added on top of the base; never replaces it.</li><li><strong>Mask</strong> - subset of bones a layer affects (e.g. upper body).</li><li><strong>Notify / event</strong> - timestamped callback in a clip; carries gameplay truth.</li><li><strong>Sync group</strong> - layers sharing normalized time so they don't drift.</li><li><strong>Viewmodel</strong> - the first-person arms/weapon rig.</li><li><strong>Socket</strong> - named attachment point on a skeleton (grip, muzzle, eject).</li><li><strong>Spring-damper</strong> - second-order system used for recoil, sway, secondary motion.</li><li><strong>Muzzle convergence</strong> - lerp of aim ray toward cosmetic muzzle direction.</li><li><strong>Prediction / authority</strong> - client predicts, server validates.</li><li><strong>Definition (def) / tag</strong> - a data object parsed from the game's package files.</li></ul>
+<h3 id="10-c-references-public-non-copyrighted">10.C References (public, non-copyrighted)</h3>
+<ul><li>Unreal Engine <strong>Lyra</strong> sample (modern shooter animation architecture, free).</li><li>Unreal docs: Animation Blueprints, Control Rig, Motion Warping, Anim Notifies.</li><li>Unity docs: Animator, Playables, Animation Rigging, Cloth.</li><li>GDC Vault: search "shooter animation", "weapon feel", "procedural recoil",</li></ul>
+<p>"locomotion", "networking the gameplay" (Halo/Destiny-era talks).</p>
+<ul><li>Game animation blogs on spring-damper recoil and additive aim offsets.</li><li>Sunrise <code>README.md</code> credits list: tiger-pkg, alkahest, tachyscope, D2TagParser,</li></ul>
+<p>DestinyUnpacker, and friends (parsers/tools - cite them).</p>
+<h3 id="10-d-one-page-summary">10.D One-page summary</h3>
+<ol><li><strong>Layers, not clips.</strong> Base + weapon + additive + secondary + IK, evaluated bottom-up.</li><li><strong>Notifies carry gameplay.</strong> Clip end is cosmetic; the contract is the notify time.</li><li><strong>Springs create feel.</strong> Recoil/sway/breathing are second-order systems with tunable constants.</li><li><strong>Commands, not buttons.</strong> Input is buffered commands consumed by a state machine.</li><li><strong>State is replicated, not animation.</strong> Remote players re-simulate from state.</li><li><strong>Data-driven everything.</strong> New weapons/emotes are data, never code branches.</li><li><strong>Read at runtime, never commit assets.</strong> Preservation, not piracy.</li><li><strong>Test feel quantitatively.</strong> Fixed inputs -&gt; captured outputs -&gt; invariants + metrics.</li></ol>
+<hr />
+<p><em>End of document. Generated HTML companion: <code>documentation/animation-character-systems.html</code>.</em></p>
+</main>
+</div>
+</body>
+</html>
