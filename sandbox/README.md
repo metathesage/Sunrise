@@ -123,7 +123,26 @@ Vibration API. Press any button on the pad to wake it up (browsers require a use
 
 Other polish: a first-person crosshair, ACES tone mapping, and a muzzle-flash light.
 
-### 2. `animation-sandbox.html` - 2D canvas (lighter)
+### 2. `halloween-bladerunner-tron.html` - 4x4 cel-shaded map
+
+A cel-shaded / hand-drawn **4x4 city block**: Halloween x Blade Runner x Tron.
+
+- **Toon shading** via `MeshToonMaterial` with a 4-band gradient ramp, plus **ink outlines**
+  from inverted-hull silhouettes (191 of them). Hand-drawn feel from a paper-grain, cross-hatch
+  and vignette overlay.
+- **4x4 grid** of blocks with a Tron street grid (glowing centre lines), towers with **neon
+  vertical edges and rooftop signs**, a central **Tron obelisk with rings**, a **graveyard** and a
+  lantern **market**.
+- **Blade Runner:** rain (1000 line streaks), fog, spinners (flying cars with light trails),
+  magenta street lamps, purple night sky and a big moon.
+- **Halloween:** jack-o'-lanterns with glowing faces and orange point lights, bats wheeling
+  overhead, gravestones.
+- Panel toggles: ink outlines, neon, grid, rain, pumpkins, bats, spinners, fog; sliders for neon
+  glow, fog, FOV, camera height; **Regenerate 4x4** builds a fresh layout from a seeded RNG.
+
+Fully self-contained (three.js inlined), so it opens offline from `file://`.
+
+### 3. `animation-sandbox.html` - 2D canvas (lighter)
 
 A minimal 2D canvas version of the same model (viewmodel + HUD + sliders + tests). Useful as a
 readable reference next to the C++ core.
@@ -174,5 +193,6 @@ sandbox/
   Makefile                  portable build
   CMakeLists.txt            CMake build + ctest target
   three-sandbox.html        3D interactive sandbox (Three.js, rigged character + dev panel)
+  halloween-bladerunner-tron.html  4x4 cel-shaded map (toon + ink outlines)
   animation-sandbox.html    2D interactive sandbox (canvas)
 ```
