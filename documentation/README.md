@@ -12,6 +12,16 @@
 - **[animation-character-systems.html](animation-character-systems.html)** — the same document
   as a standalone, styled, self-contained HTML page with a table of contents.
 
+## Runnable sandbox
+
+The systems described in the doc are implemented as a small, testable model in
+[`../sandbox/`](../sandbox/README.md):
+
+- **C++ core** (`sandbox/src`) — builds with any C++20 compiler, no Windows toolchain required.
+  Run `make test` for the 15 invariant tests from §8.2, or `make demo` for a scripted trace.
+- **Interactive HTML** (`sandbox/animation-sandbox.html`) — self-contained browser sandbox with a
+  live canvas viewmodel, tuning sliders, HUD, and an in-page "Run tests" button.
+
 ### Regenerating the HTML
 
 The HTML is generated from the Markdown (single source of truth) by a dependency-free script:

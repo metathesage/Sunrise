@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Animation Sandbox - interactive</title>
+<style>
+  :root{
+    --bg:#0e1116; --panel:#151a22; --panel2:#1b2230; --fg:#d7dee8; --muted:#8b97a8;
+    --accent:#6ea8fe; --accent2:#f0b866; --border:#263041; --ok:#7ddc9a; --bad:#ff7b7b;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+    font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  header{padding:18px 24px;border-bottom:1px solid var(--border);background:var(--panel)}
+  header h1{margin:0;font-size:20px}
+  header p{margin:4px 0 0;color:var(--muted);font-size:13px}
+  .wrap{display:grid;grid-template-columns:340px minmax(0,1fr);gap:0;min-height:calc(100vh - 78px)}
+  .side{padding:18px;border-right:1px solid var(--border);background:var(--panel);overflow:auto}
+  .main{padding:18px;display:flex;flex-direction:column;gap:16px;min-width:0}
+  h2{font-size:12px;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);margin:18px 0 8px}
+  h2:first-child{margin-top:0}
+  button{background:var(--panel2);color:var(--fg);border:1px solid var(--border);border-radius:8px;
+    padding:9px 12px;font-size:13px;cursor:pointer;transition:.12s}
+  button:hover{border-color:var(--accent);color:var(--accent)}
+  button.on{background:var(--accent);color:#08111f;border-color:var(--accent)}
+  .btns{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .btns .wide{grid-column:1 / -1}
+  .slider{display:grid;grid-template-columns:1fr 54px;align-items:center;gap:8px;margin:7px 0}
+  .slider label{font-size:12.5px;color:var(--muted)}
+  .slider input[type=range]{width:100%}
+  .slider .val{text-align:right;font-variant-numeric:tabular-nums;font-size:12.5px;color:var(--accent2)}
+  canvas{width:100%;height:auto;background:#080b10;border:1px solid var(--border);border-radius:12px}
+  .hud{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .cell{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:8px 10px}
+  .cell .k{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
+  .cell .v{font-size:17px;font-variant-numeric:tabular-nums;color:var(--accent2)}
+  .tl{position:relative;height:26px;background:var(--panel);border:1px solid var(--border);border-radius:8px;overflow:hidden}
+  .tl .fill{position:absolute;left:0;top:0;bottom:0;background:rgba(110,168,254,.25);width:0}
+  .tl .mk{position:absolute;top:0;bottom:0;width:2px;background:var(--accent2)}
+  .tl .mk span{position:absolute;top:2px;left:4px;font-size:10px;color:var(--muted);white-space:nowrap}
+  pre.tests{margin:0;background:#080b10;border:1px solid var(--border);border-radius:10px;padding:12px;
+    font:12.5px/1.5 "SFMono-Regular",Consolas,monospace;white-space:pre-wrap;max-height:260px;overflow:auto}
+  .pass{color:var(--ok)} .fail{color:var(--bad)}
+  @media(max-width:900px){.wrap{grid-template-columns:1fr}.side{border-right:0;border-bottom:1px solid var(--border)}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Destiny-Style Animation Sandbox</h1>
+  <p>Live, deterministic model of the weapon state machine, notify timeline, additive recoil springs,
+     sway/ADS, emote priority and buffered input. Companion to <code>documentation/animation-character-systems.md</code>.</p>
+</header>
+<div class="wrap">
+  <aside class="side">
+    <h2>Actions</h2>
+    <div class="btns">
+      <button id="bFire">Fire</button>
+      <button id="bReload">Reload</button>
+      <button id="bAds">ADS (toggle)</button>
+      <button id="bWave">Emote: Wave</button>
+      <button id="bDance">Emote: Dance</button>
+      <button id="bDamage">Take Damage</button>
+      <button id="bReset" class="wide">Reset</button>
+    </div>
+
+    <h2>Tuning</h2>
+    <div class="slider"><label>Recoil freq (Hz)</label><input type="range" id="sFreq" min="6" max="14" step="0.5" value="9"><div class="val" id="vFreq">9.0</div></div>
+    <div class="slider"><label>Damping ratio</label><input type="range" id="sZeta" min="0.6" max="1.2" step="0.05" value="1"><div class="val" id="vZeta">1.00</div></div>
+    <div class="slider"><label>Pitch kick (deg)</label><input type="range" id="sPitch" min="-4" max="-1.5" step="0.1" value="-2.4"><div class="val" id="vPitch">-2.4</div></div>
+    <div class="slider"><label>Recovery hold (s)</label><input type="range" id="sHold" min="0.05" max="0.25" step="0.01" value="0.12"><div class="val" id="vHold">0.12</div></div>
+    <div class="slider"><label>ADS in (s)</label><input type="range" id="sAds" min="0.08" max="0.30" step="0.01" value="0.18"><div class="val" id="vAds">0.18</div></div>
+    <div class="slider"><label>Sway amplitude (deg)</label><input type="range" id="sSway" min="0" max="1.2" step="0.05" value="0.6"><div class="val" id="vSway">0.60</div></div>
+
+    <h2>Invariant tests</h2>
+    <button id="bTests" class="wide">Run tests</button>
+    <pre class="tests" id="tests">Click "Run tests".</pre>
+  </aside>
+
+  <section class="main">
+    <canvas id="cv" width="760" height="360"></canvas>
+    <div class="hud">
+      <div class="cell"><div class="k">State</div><div class="v" id="hState">Idle</div></div>
+      <div class="cell"><div class="k">Ammo</div><div class="v" id="hAmmo">8</div></div>
+      <div class="cell"><div class="k">Aim (ADS)</div><div class="v" id="hAim">0.00</div></div>
+      <div class="cell"><div class="k">Cam pitch</div><div class="v" id="hPitch">0.00</div></div>
+      <div class="cell"><div class="k">Weapon kick</div><div class="v" id="hKick">0.00</div></div>
+      <div class="cell"><div class="k">FOV</div><div class="v" id="hFov">90</div></div>
+    </div>
+    <div>
+      <h2 style="margin-top:0">Reload notify timeline</h2>
+      <div class="tl" id="tl">
+        <div class="fill" id="tlFill"></div>
+      </div>
+    </div>
+  </section>
+</div>
+<script>
+"use strict";
+const PI = Math.PI;
+const clamp = (v,a,b)=>v<a?a:(v>b?b:v);
+
+// Damped spring via closed-form (exact, frame-rate independent).
+class Spring {
+  constructor(f=9,z=1){this.x=0;this.v=0;this.f=f;this.z=z;}
+  update(dt){
+    if(dt<=0)return;
+    const w=2*PI*this.f, x0=this.x, v0=this.v;
+    if(Math.abs(this.z-1)<1e-4){
+      const e=Math.exp(-w*dt), c1=v0+w*x0;
+      this.x=(x0+c1*dt)*e; this.v=(v0-w*c1*dt)*e;
+    } else if(this.z<1){
+      const wd=w*Math.sqrt(1-this.z*this.z), e=Math.exp(-this.z*w*dt);
+      const a=x0, b=(v0+this.z*w*x0)/wd, ct=Math.cos(wd*dt), st=Math.sin(wd*dt);
+      this.x=e*(a*ct+b*st);
+      this.v=e*((-this.z*w*a+b*wd)*ct+(-this.z*w*b-a*wd)*st);
+    } else {
+      const s=Math.sqrt(this.z*this.z-1), r1=w*(-this.z+s), r2=w*(-this.z-s);
+      const c1=(v0-r2*x0)/(r1-r2), c2=(r1*x0-v0)/(r1-r2);
+      const e1=Math.exp(r1*dt), e2=Math.exp(r2*dt);
+      this.x=c1*e1+c2*e2; this.v=c1*r1*e1+c2*r2*e2;
+    }
+    if(Math.abs(this.x)<1e-4&&Math.abs(this.v)<1e-3){this.x=0;this.v=0;}
+  }
+  kick(a){this.x+=a;this.v=0;}
+  settled(e=1e-3){return Math.abs(this.x)<e&&Math.abs(this.v)<1e-2;}
+}
+
+class Axis {
+  constructor(f,z,hold){this.s=new Spring(f,z);this.hold=hold;this.holdLeft=0;}
+  fire(k){this.s.kick(k);this.holdLeft=this.hold;}
+  update(dt){ if(this.holdLeft>0){this.holdLeft-=dt; if(this.holdLeft>0)return;} this.s.update(dt); }
+}
+
+const S={Idle:"Idle",Fire:"Fire",Reload:"Reload",Ads:"Ads",AdsFire:"AdsFire"};
+
+class Sim {
+  constructor(){ this.reset(); }
+  reset(){
+    this.weapon={magSize:8,fireInterval:0.30,fireClip:0.28,
+      pitch:-2.4,yaw:0.35,freq:9,zeta:1,hold:0.12,split:0.6,
+      adsIn:0.18,adsOut:0.14,fovHip:90,fovAim:55};
+    this.reload={magEject:0.35,magInsert:0.90,ammoRefill:1.60,reloadEnd:2.30};
+    this.state=S.Idle; this.ammo=this.weapon.magSize; this.spare=999;
+    this.now=0; this.stateT=0; this.fireCd=0; this.aim=0;
+    this.camPitch=new Axis(9,1,0.12); this.camYaw=new Axis(9,1,0.12); this.weaponKick=new Axis(9,1,0.12);
+    this.emoteActive=false; this.emote=null; this.emoteT=0;
+    this.sway={hz:0.25,amp:0.6,adsScale:0.35};
+    this.events=[]; this.transitions=[]; this.fired=[];
+    this.rng=0x1234abcd>>>0;
+    this.cmd={fire:-1e9,reload:-1e9,wave:-1e9,dance:-1e9};
+    this.adsHeld=false; this.bufferWindow=0.20;
+    this.syncSprings();
+  }
+  syncSprings(){
+    for(const ax of [this.camPitch,this.camYaw,this.weaponKick]){
+      ax.s.f=this.weapon.freq; ax.s.z=this.weapon.zeta; ax.hold=this.weapon.hold;
+    }
+  }
+  rand(){ this.rng^=this.rng<<13; this.rng>>>=0; this.rng^=this.rng>>>17;
+    this.rng^=this.rng<<5; this.rng>>>=0; return ((this.rng&0xFFFFFF)/0xFFFFFF)*2-1; }
+  setState(s){ if(s===this.state)return; this.transitions.push(this.state+" -> "+s); this.state=s; this.stateT=0; }
+  canMove(){ return !(this.emoteActive && this.emote && this.emote.mask==="full"); }
+  damage(){ if(this.emoteActive){ this.emoteActive=false; this.events.push("damage cancels emote"); } }
+  interruptReload(){ if(this.state===S.Reload){ this.events.push("reload interrupted"); this.setState(S.Idle); } }
+  buffered(k){ return (this.now - this.cmd[k]) <= this.bufferWindow; }
+  press(k){ this.cmd[k]=this.now; }
+  startEmote(def){
+    if(this.state!==S.Idle) return false;
+    if(this.emoteActive) return false;
+    this.emote=def; this.emoteActive=true; this.emoteT=0;
+    this.events.push("emote start: "+def.name); return true;
+  }
+  cameraPitch(){
+    const breath=this.sway.amp*Math.sin(2*PI*this.sway.hz*this.now)*(1-this.aim*(1-this.sway.adsScale));
+    return this.camPitch.s.x+breath;
+  }
+  fov(){ return this.weapon.fovHip+(this.weapon.fovAim-this.weapon.fovHip)*this.aim; }
+
+  step(dt){
+    if(dt<=0)return;
+    dt=Math.min(dt,0.25);
+    const hMax=1/60;
+    while(dt>1e-6){ const h=Math.min(dt,hMax); this.stepInner(h); dt-=h; }
+  }
+  stepInner(h){
+    this.fired.length=0;
+    const s0=this.state, prevT=this.stateT;
+    this.now+=h; this.stateT+=h; this.fireCd-=h;
+    if(this.emoteActive) this.emoteT+=h;
+
+    // ADS blend
+    const adsAllowed=(this.state===S.Idle||this.state===S.Ads||this.state===S.AdsFire||this.state===S.Fire);
+    const target=(adsAllowed&&this.adsHeld)?1:0;
+    const rate=(target>this.aim)?(1/this.weapon.adsIn):(1/this.weapon.adsOut);
+    const d=target-this.aim, sv=rate*h;
+    if(Math.abs(d)<=sv) this.aim=target; else this.aim+=(d>0?sv:-sv);
+    this.aim=clamp(this.aim,0,1);
+
+    // emotes (edge, buffered)
+    if(this.buffered("wave")){ this.cmd.wave=-1e9;
+      if(this.emoteActive){this.emoteActive=false;this.events.push("emote cancel (toggle)");}
+      else this.startEmote({name:"wave",mask:"upper",priority:40,allowMove:true,cancelOnFire:true}); }
+    if(this.buffered("dance")){ this.cmd.dance=-1e9;
+      if(this.emoteActive){this.emoteActive=false;this.events.push("emote cancel (toggle)");}
+      else this.startEmote({name:"dance",mask:"full",priority:50,allowMove:false,cancelOnFire:true}); }
+
+    // reload (edge, buffered)
+    if(this.buffered("reload")){
+      const canStart=(this.state===S.Idle||this.state===S.Ads)&&this.ammo<this.weapon.magSize&&this.spare>0;
+      if(canStart){ this.cmd.reload=-1e9; this.events.push("reload begin"); this.setState(S.Reload); }
+    }
+    // fire (edge, buffered)
+    if(this.buffered("fire")){
+      const canFire=(this.state===S.Idle||this.state===S.Ads)&&this.fireCd<=0;
+      if(canFire){ this.cmd.fire=-1e9;
+        if(this.emoteActive&&this.emote.cancelOnFire){this.emoteActive=false;this.events.push("fire cancels emote");}
+        if(this.ammo>0){ this.ammo--; const ads=(this.state===S.Ads);
+          this.setState(ads?S.AdsFire:S.Fire);
+          this.camPitch.fire(this.weapon.pitch*this.weapon.split);
+          this.weaponKick.fire(this.weapon.pitch*(1-this.weapon.split));
+          this.camYaw.fire(this.rand()*this.weapon.yaw);
+          this.fireCd=this.weapon.fireInterval;
+          this.events.push("fire (ammo="+this.ammo+")");
+        } else this.events.push("dry fire");
+      }
+    }
+
+    // end-of-state (only if we did not just change state)
+    if(this.state===s0&&s0===S.Reload){
+      const ns=[["mag_eject",this.reload.magEject],["mag_insert",this.reload.magInsert],
+                ["ammo_refill",this.reload.ammoRefill],["reload_end",this.reload.reloadEnd]];
+      for(const nt of ns){ const n=nt[0], t=nt[1]; if(prevT<t&&this.stateT>=t){ this.fired.push(n);
+        if(n==="ammo_refill"){ this.ammo=this.weapon.magSize; this.events.push("NOTIFY ammo_refill -> mag="+this.ammo); }
+        else this.events.push("NOTIFY "+n); } }
+      if(this.stateT>=this.reload.reloadEnd){ this.events.push("reload end"); this.setState(this.adsHeld?S.Ads:S.Idle); }
+    }
+    if(this.state===s0&&(s0===S.Fire||s0===S.AdsFire)){
+      if(this.stateT>=this.weapon.fireClip) this.setState(this.adsHeld?S.Ads:S.Idle);
+    }
+
+    this.camPitch.update(h); this.camYaw.update(h); this.weaponKick.update(h);
+    for(const k of ["fire","reload","wave","dance"]) if(!this.buffered(k)) this.cmd[k]=-1e9;
+  }
+}
+</script>
+
+<script>
+// ---- wire up UI + render loop -------------------------------------------
+const sim = new Sim();
+const cv = document.getElementById("cv");
+const ctx = cv.getContext("2d");
+const $ = id => document.getElementById(id);
+let lastFire = -10, lastEvent = "";
+
+$("bFire").onclick   = () => sim.press("fire");
+$("bReload").onclick = () => sim.press("reload");
+$("bWave").onclick   = () => sim.press("wave");
+$("bDance").onclick  = () => sim.press("dance");
+$("bDamage").onclick = () => sim.damage();
+$("bReset").onclick  = () => sim.reset();
+$("bAds").onclick    = () => { sim.adsHeld = !sim.adsHeld; $("bAds").classList.toggle("on", sim.adsHeld); };
+
+function bindSlider(id, vid, fn, fmt){
+  const el=$(id), v=$(vid);
+  const upd=()=>{ const val=parseFloat(el.value); fn(val); v.textContent=fmt(val); };
+  el.oninput=upd; upd();
+}
+bindSlider("sFreq","vFreq", v=>{sim.weapon.freq=v; sim.syncSprings();}, v=>v.toFixed(1));
+bindSlider("sZeta","vZeta", v=>{sim.weapon.zeta=v; sim.syncSprings();}, v=>v.toFixed(2));
+bindSlider("sPitch","vPitch", v=>{sim.weapon.pitch=v;}, v=>v.toFixed(1));
+bindSlider("sHold","vHold", v=>{sim.weapon.hold=v; sim.syncSprings();}, v=>v.toFixed(2));
+bindSlider("sAds","vAds", v=>{sim.weapon.adsIn=v;}, v=>v.toFixed(2));
+bindSlider("sSway","vSway", v=>{sim.sway.amp=v;}, v=>v.toFixed(2));
+
+// reload timeline markers
+(function(){
+  const tl=$("tl");
+  const total=sim.reload.reloadEnd;
+  const marks=[["mag_eject",sim.reload.magEject],["mag_insert",sim.reload.magInsert],
+               ["ammo_refill",sim.reload.ammoRefill],["reload_end",sim.reload.reloadEnd]];
+  for(const [n,t] of marks){
+    const d=document.createElement("div"); d.className="mk"; d.style.left=(t/total*100)+"%";
+    d.innerHTML="<span>"+n+"</span>"; tl.appendChild(d);
+  }
+})();
+
+function draw(){
+  const W=cv.width, H=cv.height;
+  ctx.clearRect(0,0,W,H);
+  // ground / backdrop
+  const g=ctx.createLinearGradient(0,0,0,H); g.addColorStop(0,"#0d1520"); g.addColorStop(1,"#080b10");
+  ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle="#1a2330"; ctx.beginPath(); ctx.moveTo(0,H*0.62); ctx.lineTo(W,H*0.62); ctx.stroke();
+
+  // crosshair moves with camera recoil/sway
+  const cx=W/2 + sim.camYaw.s.x*18;
+  const cy=H*0.42 + sim.cameraPitch()*18;
+  ctx.strokeStyle=sim.adsHeld?"#f0b866":"#6ea8fe"; ctx.lineWidth=2;
+  ctx.beginPath();
+  ctx.moveTo(cx-10,cy); ctx.lineTo(cx-3,cy); ctx.moveTo(cx+3,cy); ctx.lineTo(cx+10,cy);
+  ctx.moveTo(cx,cy-10); ctx.lineTo(cx,cy-3); ctx.moveTo(cx,cy+3); ctx.lineTo(cx,cy+10);
+  ctx.stroke();
+
+  // gun (viewmodel) - rotates + translates with weapon kick and sway
+  const kick=sim.weaponKick.s.x; // negative = up
+  const adsShift=sim.aim*40;
+  const gx=W/2 + sim.camYaw.s.x*6;
+  const gy=H*0.86 - adsShift + kick*6;
+  ctx.save();
+  ctx.translate(gx,gy);
+  ctx.rotate((kick*1.5)*Math.PI/180 + sim.camYaw.s.x*0.01);
+  // hands
+  ctx.fillStyle="#2b3648";
+  ctx.fillRect(-70,-8,54,26); ctx.fillRect(20,-8,54,26);
+  // gun body
+  ctx.fillStyle="#3d4a5f"; ctx.strokeStyle="#5b6b85"; ctx.lineWidth=2;
+  ctx.fillRect(-26,-34,64,30);
+  ctx.fillStyle="#4a5a72"; ctx.fillRect(-8,-58,16,26);          // slide/barrel
+  ctx.fillStyle="#2b3648"; ctx.fillRect(-40,4,18,34);           // grip
+  ctx.strokeStyle="#5b6b85"; ctx.strokeRect(-26,-34,64,30);
+  ctx.restore();
+
+  // muzzle flash
+  if(sim.now-lastFire<0.05){
+    ctx.fillStyle="rgba(240,184,102,0.85)";
+    ctx.beginPath(); ctx.arc(gx+8, gy-58, 12, 0, 2*Math.PI); ctx.fill();
+  }
+
+  // emote indicator
+  if(sim.emoteActive){
+    ctx.fillStyle="#f0b866"; ctx.font="14px monospace";
+    ctx.fillText("emote: "+sim.emote.name+" ("+sim.emote.mask+")", 16, 24);
+    if(!sim.canMove()){ ctx.fillStyle="#ff9b9b"; ctx.fillText("movement blocked", 16, 44); }
+  }
+}
+
+function updateHud(){
+  $("hState").textContent=sim.state;
+  $("hAmmo").textContent=sim.ammo+" / "+sim.weapon.magSize;
+  $("hAim").textContent=sim.aim.toFixed(2);
+  $("hPitch").textContent=sim.cameraPitch().toFixed(2);
+  $("hKick").textContent=sim.weaponKick.s.x.toFixed(2);
+  $("hFov").textContent=sim.fov().toFixed(0);
+  $("tlFill").style.width=(sim.state===S.Reload?(sim.stateT/sim.reload.reloadEnd*100):0)+"%";
+  if(sim.events.length){ lastEvent=sim.events[sim.events.length-1]; sim.events.length=0; }
+  if(sim.fired.length) lastFire=sim.now;
+}
+
+let prev=performance.now();
+function frame(ts){
+  let dt=(ts-prev)/1000; prev=ts;
+  if(dt>0.1) dt=0.1;
+  sim.step(dt);
+  updateHud(); draw();
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+// ---- in-page invariant tests (mirror the C++ harness) --------------------
+function advance(s,sec,dt){ dt=dt||1/60; for(let x=0;x<sec-1e-6;x+=dt) s.step(dt); }
+function scenario(s){
+  s.reset();
+  s.press("fire"); s.step(1/60); s.step(1/60); s.step(1/60);
+  s.press("fire"); s.step(1/60);
+  s.press("reload");
+  for(let i=0;i<200;i++) s.step(1/60);
+  s.adsHeld=true; for(let i=0;i<30;i++) s.step(1/60);
+}
+function runTests(){
+  const out=[]; let pass=0,fail=0;
+  const t=(n,c)=>{ if(c){pass++; out.push("[PASS] "+n);} else {fail++; out.push("[FAIL] "+n);} };
+
+  let s=new Sim(); s.ammo=0; s.press("reload"); advance(s,1.5);
+  t("reload: ammo unchanged before ammo_refill", s.ammo===0);
+  advance(s,0.2); t("reload: refilled AT ammo_refill (not clip end)", s.ammo===s.weapon.magSize);
+
+  s=new Sim(); s.ammo=0; s.press("reload"); advance(s,1.0); s.interruptReload();
+  t("cancel: ammo unchanged after interrupt", s.ammo===0);
+  t("cancel: returns to Idle", s.state===S.Idle);
+
+  s=new Sim(); s.ammo=2; s.press("reload"); advance(s,0.2);
+  t("no-dupe: entered Reload", s.state===S.Reload);
+  s.press("fire"); advance(s,0.5); t("no-dupe: fire during reload consumes nothing", s.ammo===2);
+
+  s=new Sim(); s.ammo=3; s.press("fire"); advance(s,0.15); s.press("reload"); advance(s,0.25);
+  t("buffer: reload pressed during fire plays after", s.state===S.Reload);
+
+  s=new Sim(); s.press("dance"); advance(s,0.02);
+  t("emote: full-body blocks movement", s.emoteActive && !s.canMove());
+  s=new Sim(); s.press("wave"); advance(s,0.02);
+  t("emote: upper-body allows movement", s.emoteActive && s.canMove());
+  s=new Sim(); s.press("dance"); advance(s,0.02); s.damage();
+  t("emote: damage always cancels", !s.emoteActive);
+
+  s=new Sim(); const exp=s.weapon.pitch*s.weapon.split; s.press("fire"); s.step(1/60);
+  t("recoil: peak equals configured kick", Math.abs(s.camPitch.s.x-exp)<1e-3);
+  advance(s,1.0); t("recoil: settles within 1s", s.camPitch.s.settled(0.05));
+  s=new Sim(); for(let i=0;i<20;i++){ s.press("fire"); s.step(0.2); }
+  t("recoil: bounded under dt spikes", Math.abs(s.camPitch.s.x)<50);
+
+  s=new Sim(); s.adsHeld=true; let steps=0;
+  while(s.aim<0.999 && steps<2000){ s.step(1/60); steps++; }
+  t("ads: blend time ~ ads_in", Math.abs(steps/60 - s.weapon.adsIn)<0.05);
+
+  const a=new Sim(), b=new Sim(); scenario(a); scenario(b);
+  t("determinism: identical logs across runs", JSON.stringify(a.transitions)===JSON.stringify(b.transitions) && JSON.stringify(a.events)===JSON.stringify(b.events));
+
+  out.push("------------------------------");
+  out.push("RESULT: "+pass+" passed, "+fail+" failed");
+  $("tests").textContent=out.join("\n");
+}
+$("bTests").onclick=runTests;
+</script>
+</body>
+</html>
