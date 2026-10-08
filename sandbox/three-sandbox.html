@@ -50,6 +50,7 @@
   #crosshair:before{content:'';position:absolute;left:5px;top:5px;width:12px;height:12px;border:2px solid rgba(255,255,255,.92);border-radius:50%;box-shadow:0 0 5px #000}
   #crosshair:after{content:'';position:absolute;left:9px;top:9px;width:4px;height:4px;background:#fff;border-radius:50%;box-shadow:0 0 6px #000}
   #hud2{position:fixed;inset:0;pointer-events:none;z-index:6;font-family:inherit}
+  #vignette{position:fixed;inset:0;pointer-events:none;z-index:4;background:radial-gradient(ellipse at 50% 45%, rgba(0,0,0,0) 45%, rgba(0,0,0,.38) 100%)}
   #hud2 .superwrap{position:absolute;top:16px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:5px}
   #hud2 .superbar{display:flex;gap:3px}
   #hud2 .superbar i{width:15px;height:11px;background:rgba(235,242,252,.16);clip-path:polygon(24% 0,100% 0,76% 100%,0 100%)}
@@ -82,6 +83,7 @@
 <div id="err"></div>
 <div id="app"></div>
 <div id="crosshair"></div>
+<div id="vignette"></div>
 <div id="hud2">
   <div class="superwrap"><div class="superbar" id="superbar"></div><div class="shield"><i id="shieldFill"></i></div></div>
   <div class="radar"><div class="sweep"></div><div class="dot"></div></div>
@@ -112,6 +114,7 @@
       <button id="tSockets">Sockets</button>
       <button id="tGrid">Grid</button>
       <button id="tWire">Wireframe</button>
+      <button id="tCol">Colliders</button>
     </div>
     <label class="sl">FOV <input type="range" id="sFov" min="45" max="110" value="75"><span class="v" id="vFov">75</span></label>
     <div class="sub" style="margin:6px 0 0">Drag = look / orbit · Wheel = zoom · WASD = move</div>
@@ -534,14 +537,14 @@ const app = document.getElementById('app');
 let renderer; try{ renderer=new THREE.WebGLRenderer({antialias:true}); }catch(e){ __err('WebGL unavailable: '+e.message); throw e; }
 renderer.setPixelRatio(Math.min(devicePixelRatio,2));
 renderer.setSize(innerWidth,innerHeight);
-renderer.shadowMap.enabled = true;
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.15;
 app.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x05070c);
-scene.fog = new THREE.Fog(0x070a12, 20, 190);
+scene.background = new THREE.Color(0x9aa7b6);
+scene.fog = new THREE.Fog(0x9aa7b6, 70, 250);
 
 const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.02, 200);
 camera.position.set(0,1.5,3);
@@ -572,71 +575,111 @@ controls.enableDamping = true; controls.dampingFactor = 0.08;
 controls.minDistance = 1; controls.maxDistance = 12;
 controls.maxPolarAngle = Math.PI*0.95;
 
-scene.add(new THREE.HemisphereLight(0x2a3a55, 0x05070a, 0.55));
-const key = new THREE.DirectionalLight(0xc3d6ff, 1.15);
-key.position.set(-9,15,7); key.castShadow=true;
-key.shadow.mapSize.set(2048,2048); key.shadow.camera.near=1; key.shadow.camera.far=70;
-key.shadow.camera.left=-22; key.shadow.camera.right=22; key.shadow.camera.top=22; key.shadow.camera.bottom=-22;
-scene.add(key);
-const rim = new THREE.DirectionalLight(0xf0b866, 0.9); rim.position.set(7,5,-12); scene.add(rim);
-const bounce = new THREE.DirectionalLight(0x6ea8fe, 0.5); bounce.position.set(4,-3,8); scene.add(bounce);
+scene.add(new THREE.HemisphereLight(0xdfe8f5, 0x7a828c, 0.85));
+const sun = new THREE.DirectionalLight(0xffffff, 1.7);
+sun.position.set(34,52,22); sun.castShadow=true;
+sun.shadow.mapSize.set(2048,2048);
+sun.shadow.camera.near=1; sun.shadow.camera.far=190;
+sun.shadow.camera.left=-75; sun.shadow.camera.right=75; sun.shadow.camera.top=75; sun.shadow.camera.bottom=-75;
+sun.shadow.bias=-0.0006;
+scene.add(sun);
+const fill = new THREE.DirectionalLight(0xbcd0e8, 0.35); fill.position.set(-30,20,-25); scene.add(fill);
 
-const grid = new THREE.GridHelper(80, 80, 0x2a3644, 0x1a222d);
-grid.position.y=0.01; grid.visible=false; scene.add(grid);
+const grid = new THREE.GridHelper(200, 200, 0x6f767d, 0x8b9299);
+grid.position.y=0.02; grid.visible=false; scene.add(grid);
 
-function buildEnvironment(){
-  const grp=new THREE.Group();
-  const ground=new THREE.Mesh(new THREE.PlaneGeometry(320,320),
-    new THREE.MeshStandardMaterial({color:0x0a0d13, roughness:0.26, metalness:0.78}));
-  ground.rotation.x=-PI/2; ground.receiveShadow=true; grp.add(ground);
-  const rnd=(a,b)=>a+Math.random()*(b-a);
-  const white=new THREE.MeshStandardMaterial({color:0xd8e2ef, emissive:0x6f88a8, emissiveIntensity:0.55, roughness:0.5, metalness:0.2});
-  const gold =new THREE.MeshStandardMaterial({color:0xf0c46a, emissive:0xc98a2a, emissiveIntensity:0.95, roughness:0.35, metalness:0.4});
-  const city=new THREE.Group();
-  for(let i=0;i<80;i++)
-  {
-    const h=rnd(9,42), r=rnd(0.7,2.8), ang=rnd(-PI*0.95,PI*0.95), dist=rnd(50,130);
-    const m=new THREE.Mesh(new THREE.ConeGeometry(r,h,6), (i%9===0)?gold:white);
-    m.position.set(Math.sin(ang)*dist, h/2-2, -Math.cos(ang)*dist);
-    m.rotation.y=rnd(0,PI); city.add(m);
-  }
-  for(let i=0;i<7;i++){
-    const h=rnd(26,44), r=rnd(1.4,2.8);
-    const m=new THREE.Mesh(new THREE.ConeGeometry(r,h,7), white);
-    m.position.set(rnd(-34,34), h/2-1, rnd(-95,-48)); city.add(m);
-  }
-  grp.add(city);
-  const refl=city.clone(); refl.scale.y=-1; refl.position.y=-0.03;
-  const reflMat=new THREE.MeshBasicMaterial({color:0x2a3c58, transparent:true, opacity:0.3});
-  refl.traverse(o=>{ if(o.isMesh) o.material=reflMat; });
-  grp.add(refl);
-  const bark=new THREE.MeshStandardMaterial({color:0x241d1a, roughness:0.95});
-  const leaf=new THREE.MeshStandardMaterial({color:0x241626, roughness:0.95});
-  const petal=new THREE.MeshStandardMaterial({color:0xe8a6c8, emissive:0x8a3a5e, emissiveIntensity:0.55, roughness:0.7});
-  for(let i=0;i<16;i++){
-    const t=new THREE.Group();
-    const side=(Math.random()<0.5?-1:1), x=side*rnd(11,36), z=rnd(-24,12), th=rnd(3,6);
-    const trunk=new THREE.Mesh(new THREE.CylinderGeometry(0.18,0.32,th,8), bark);
-    trunk.position.y=th/2; trunk.castShadow=true; t.add(trunk);
-    for(let k=0;k<3;k++){
-      const cc=new THREE.Mesh(new THREE.SphereGeometry(rnd(1.2,2.3),10,8), leaf);
-      cc.position.set(rnd(-1,1), th+rnd(-0.4,1.2), rnd(-1,1)); cc.castShadow=true; t.add(cc);
-      const p=new THREE.Mesh(new THREE.SphereGeometry(rnd(0.5,1.1),8,6), petal);
-      p.position.set(rnd(-1.8,1.8), th+rnd(0,1.7), rnd(-1.8,1.8)); t.add(p);
-    }
-    t.position.set(x,0,z); grp.add(t);
-  }
-  const motes=[];
-  for(let i=0;i<110;i++){
-    const m=new THREE.Mesh(new THREE.SphereGeometry(rnd(0.03,0.06),6,4), petal);
-    const a=rnd(0,PI*2), rr=rnd(9,46);
-    m.position.set(Math.cos(a)*rr, rnd(1.5,17), -Math.abs(Math.sin(a)*rr)-5);
-    grp.add(m); motes.push(m);
-  }
-  scene.add(grp);
-  return {root:grp, ground, motes};
+// ---------------------------------------------------------------------------
+// GRAYBOX LEVEL - 100% procedural blockout geometry. No textures, no assets.
+// ---------------------------------------------------------------------------
+const SOLIDS=[];
+function makeChecker(){
+  const c=document.createElement('canvas'); c.width=c.height=128;
+  const x=c.getContext('2d');
+  x.fillStyle='#aeb4ba'; x.fillRect(0,0,128,128);
+  x.fillStyle='#9ca3aa'; x.fillRect(0,0,64,64); x.fillRect(64,64,64,64);
+  x.strokeStyle='#808790'; x.lineWidth=3; x.strokeRect(1,1,126,126);
+  const t=new THREE.CanvasTexture(c); t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(70,70); t.anisotropy=4;
+  return t;
 }
-const ENV = buildEnvironment();
+const MATG={
+  floor: new THREE.MeshStandardMaterial({map:makeChecker(), roughness:0.96, metalness:0.0}),
+  wall:  new THREE.MeshStandardMaterial({color:0x9aa1a8, roughness:0.96}),
+  plat:  new THREE.MeshStandardMaterial({color:0x8d949b, roughness:0.95}),
+  step:  new THREE.MeshStandardMaterial({color:0x848b92, roughness:0.95}),
+  prop:  new THREE.MeshStandardMaterial({color:0x7f868d, roughness:0.9}),
+  hi:    new THREE.MeshStandardMaterial({color:0xd08a3a, roughness:0.8}),
+  hi2:   new THREE.MeshStandardMaterial({color:0x3f7bd0, roughness:0.8}),
+  glass: new THREE.MeshStandardMaterial({color:0x9fc4e0, roughness:0.35, metalness:0.1}),
+};
+function buildGraybox(){
+  const grp=new THREE.Group();
+  const floor=new THREE.Mesh(new THREE.PlaneGeometry(140,140), MATG.floor);
+  floor.rotation.x=-PI/2; floor.receiveShadow=true; grp.add(floor);
+  const box=(w,h,d,x,y,z,mat,rotY)=>{
+    const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d), mat||MATG.wall);
+    m.position.set(x,y,z); if(rotY) m.rotation.y=rotY;
+    m.castShadow=true; m.receiveShadow=true; grp.add(m);
+    if(!rotY) SOLIDS.push({min:{x:x-w/2,y:y-h/2,z:z-d/2},max:{x:x+w/2,y:y+h/2,z:z+d/2}});
+    return m;
+  };
+  const col=(r,h,x,z)=>{
+    const m=new THREE.Mesh(new THREE.CylinderGeometry(r,r,h,16), MATG.plat);
+    m.position.set(x,h/2,z); m.castShadow=true; m.receiveShadow=true; grp.add(m);
+    SOLIDS.push({min:{x:x-r,y:0,z:z-r},max:{x:x+r,y:h,z:z+r}});
+    return m;
+  };
+  // perimeter
+  box(100,8,1.2, 0,4,-50); box(100,8,1.2, 0,4, 50);
+  box(1.2,8,100, -50,4,0); box(1.2,8,100,  50,4,0);
+  // central raised platform (top y=2) + stairs
+  box(26,2,24, 0,1,-20, MATG.plat);
+  for(let i=0;i<5;i++){ const h=0.4*(i+1); box(10,h,1.0, 0, h/2, -8+(4-i), MATG.step); }
+  // side buildings
+  box(14,9,14, -32,4.5,-24, MATG.wall); box(14,9,14, 32,4.5,-24, MATG.wall);
+  box(10,6,10, -30,3, 16, MATG.wall);  box(10,6,10, 30,3, 16, MATG.wall);
+  // colonnade
+  for(let i=0;i<4;i++){ col(0.8,8,-11,-8-6*i); col(0.8,8,11,-8-6*i); }
+  // cover crates
+  const crates=[[8,-6,1.6],[-8,-6,1.6],[16,-14,2.0],[-16,-14,2.0],[6,-30,1.4],[-6,-30,1.4],
+                [22,-4,1.8],[-22,-4,1.8],[0,-34,2.4],[12,-40,1.6],[-12,-40,1.6],[24,-30,2.0],[-24,-30,2.0]];
+  crates.forEach(c=>{ box(c[2],c[2],c[2], c[0],c[2]/2,c[1], MATG.prop); });
+  // low step-up cover
+  box(3,0.4,3, 5,0.2,6, MATG.step); box(3,0.4,3,-5,0.2,6, MATG.step);
+  // catwalk + railings
+  box(60,0.5,3, 0,6,-44, MATG.plat);
+  box(60,1.1,0.15, 0,6.8,-45.6, MATG.prop); box(60,1.1,0.15, 0,6.8,-42.4, MATG.prop);
+  // arch / doorway at far end
+  box(1.2,6,1.2, -6,3,-48, MATG.wall); box(1.2,6,1.2, 6,3,-48, MATG.wall); box(13,1.4,1.2, 0,6.7,-48, MATG.wall);
+  // accent dev markers + spawn pad
+  box(1.2,1.2,1.2, 0,0.6, 12, MATG.hi);
+  box(1.2,1.2,1.2, -18,0.6,-4, MATG.hi2);
+  box(4,0.15,4, 0,0.075, 8, MATG.glass);
+  scene.add(grp);
+  return {root:grp, ground:floor, motes:[]};
+}
+const ENV = buildGraybox();
+
+// collider debug view + simple swept collision
+const COLDEBUG=new THREE.Group();
+for(const s of SOLIDS){
+  const w=s.max.x-s.min.x, h=s.max.y-s.min.y, d=s.max.z-s.min.z;
+  const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),
+    new THREE.MeshBasicMaterial({color:0x7ddc9a, wireframe:true, transparent:true, opacity:0.45}));
+  m.position.set((s.min.x+s.max.x)/2,(s.min.y+s.max.y)/2,(s.min.z+s.max.z)/2);
+  COLDEBUG.add(m);
+}
+COLDEBUG.visible=false; scene.add(COLDEBUG);
+function blockedAt(x,z,y){
+  for(const s of SOLIDS){ if(x>s.min.x&&x<s.max.x&&z>s.min.z&&z<s.max.z){
+    if(s.max.y>y+0.65 && s.min.y<y+1.7) return true; } }
+  return false;
+}
+function groundAt(x,z,curY){
+  let best=0;
+  for(const s of SOLIDS){ if(x>s.min.x&&x<s.max.x&&z>s.min.z&&z<s.max.z){
+    if(s.max.y<=curY+0.65 && s.max.y>best) best=s.max.y; } }
+  return best;
+}
 
 // character
 const rig = buildRig();
@@ -720,10 +763,15 @@ function moveCharacter(dt){
   if(keys['KeyD']) v.add(right); if(keys['KeyA']) v.sub(right);
   if(pad.connected){ v.addScaledVector(fwd, -pad.ly); v.addScaledVector(right, pad.lx); }
   const mag=Math.min(1, v.length());
-  if(mag>0.05){ v.normalize().multiplyScalar(2.4*mag*dt); rig.root.position.add(v);
+  if(mag>0.05){
+    v.normalize().multiplyScalar(3.0*mag*dt);
+    const p=rig.root.position, y=p.y;
+    if(!blockedAt(p.x+v.x, p.z, y)) p.x += v.x;
+    if(!blockedAt(p.x, p.z+v.z, y)) p.z += v.z;
     if(mode==='tp') rig.root.rotation.y = Math.atan2(v.x,v.z);
     anim.moving=true; anim.loco='walk';
   } else { anim.moving=false; anim.loco='idle'; }
+  rig.root.position.y = groundAt(rig.root.position.x, rig.root.position.z, rig.root.position.y);
 }
 
 // viewmodel transform (FP): recoil + sway + ADS
@@ -741,7 +789,7 @@ function updateViewmodel(dt){
 }
 
 // UI state object (populated by wiring below)
-const ui = { grid:false, baseFov:75, adsToggle:false, paused:false };
+const ui = { grid:false, baseFov:75, adsToggle:false, paused:false, colliders:false };
 
 // render loop
 let last=performance.now(), fpsAcc=0, fpsN=0;
@@ -762,6 +810,7 @@ function frame(now){
   jointMeshes.forEach(m=>m.visible=ui.skeleton);
   gripAxes.visible = muzzleAxes.visible = ui.sockets;
   grid.visible = ui.grid;
+  COLDEBUG.visible = ui.colliders;
   $('crosshair').classList.toggle('hidden', mode!=='fp');
   renderer.render(scene,camera);
   updateHud(dt);
@@ -817,6 +866,7 @@ $('tSockets').onclick=()=>{ ui.sockets=!ui.sockets; $('tSockets').classList.togg
 $('tGrid').onclick   =()=>{ ui.grid=!ui.grid; $('tGrid').classList.toggle('on',ui.grid); };
 $('tWire').onclick   =()=>{ ui.wire=!ui.wire; $('tWire').classList.toggle('on',ui.wire);
   scene.traverse(o=>{ if(o.isMesh&&o.material&&'wireframe' in o.material){ o.material.wireframe=ui.wire; } }); };
+$('tCol').onclick    =()=>{ ui.colliders=!ui.colliders; $('tCol').classList.toggle('on',ui.colliders); };
 // actions
 $('aFire').onclick  =()=>anim.fire();
 $('aReload').onclick=()=>anim.reload();
