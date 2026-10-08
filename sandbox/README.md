@@ -64,6 +64,28 @@ in-app **developer control panel**:
 
 It loads Three.js from a CDN via an import map, so it needs internet access the first time.
 
+**Controller (Xbox / any "standard"-mapping gamepad):**
+
+| Input | Action |
+|---|---|
+| Left stick | Move (analog - speed scales with deflection) |
+| Right stick | Look / orbit |
+| RT | Fire (auto-repeat while held) |
+| LT | Aim / ADS (analog) |
+| X | Reload |
+| A | Emote: Wave (upper-body) |
+| B | Emote: Dance (full-body) |
+| Y | Take damage (cancels emote) |
+| LB | Reset sim |
+| RB | Toggle first/third person |
+| Start | Pause |
+
+The panel shows a live connection status, stick/trigger bars, and sliders for deadzone, look
+sensitivity, rumble strength and invert-Y. Firing triggers controller rumble via the Gamepad
+Vibration API. Press any button on the pad to wake it up (browsers require a user gesture).
+
+Other polish: a first-person crosshair, ACES tone mapping, and a muzzle-flash light.
+
 ### 2. `animation-sandbox.html` - 2D canvas (lighter)
 
 A minimal 2D canvas version of the same model (viewmodel + HUD + sliders + tests). Useful as a

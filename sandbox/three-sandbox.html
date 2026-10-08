@@ -44,10 +44,20 @@
   .pass{color:var(--ok)}.fail{color:var(--bad)}
   .tag{font-size:10px;color:var(--muted);border:1px solid var(--border);border-radius:5px;padding:1px 5px}
   #load{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#0b0e13;font-size:15px;color:var(--muted);z-index:20}
+  #crosshair{position:fixed;left:50%;top:50%;width:16px;height:16px;margin:-8px 0 0 -8px;pointer-events:none;z-index:5;opacity:.85}
+  #crosshair:before,#crosshair:after{content:'';position:absolute;background:#e8eef7;box-shadow:0 0 3px #000}
+  #crosshair:before{left:7px;top:0;width:2px;height:16px}
+  #crosshair:after{top:7px;left:0;height:2px;width:16px}
+  #crosshair.hidden{display:none}
+  .padbars{display:grid;grid-template-columns:auto 1fr;gap:4px 8px;align-items:center;font-size:11px;color:var(--muted);margin:6px 0}
+  .bar{height:6px;background:#0b0f14;border:1px solid var(--border);border-radius:4px;position:relative;overflow:hidden}
+  .bar i{position:absolute;left:0;top:0;bottom:0;width:0;background:var(--accent)}
+  .bar.trig i{background:var(--accent2)}
 </style>
 </head>
 <body>
 <div id="app"></div>
+<div id="crosshair"></div>
 <div id="load">loading Three.js…</div>
 <div id="hud">
   <div class="big" id="hState">idle</div>
@@ -114,6 +124,23 @@
   <details><summary>Tests</summary><div class="body">
     <button id="aTests">Run invariant tests</button>
     <pre class="log" id="tests">—</pre>
+  </div></details>
+
+  <details open><summary>Controller (Xbox)</summary><div class="body">
+    <div class="row"><span class="tag" id="padStatus">no gamepad - press any button</span></div>
+    <div class="sub">L-stick move / R-stick look / RT fire / LT aim / X reload / A wave / B dance / Y damage / LB reset / RB view / Start pause</div>
+    <div class="padbars">
+      <span>LX</span><span class="bar"><i id="barLX"></i></span>
+      <span>LY</span><span class="bar"><i id="barLY"></i></span>
+      <span>RX</span><span class="bar"><i id="barRX"></i></span>
+      <span>RY</span><span class="bar"><i id="barRY"></i></span>
+      <span>LT</span><span class="bar trig"><i id="barLT"></i></span>
+      <span>RT</span><span class="bar trig"><i id="barRT"></i></span>
+    </div>
+    <label class="sl">Deadzone <input type="range" id="sDz" min="0" max="0.4" step="0.01" value="0.15"><span class="v" id="vDz">0.15</span></label>
+    <label class="sl">Look sens <input type="range" id="sSens" min="0.5" max="5" step="0.1" value="2.2"><span class="v" id="vSens">2.2</span></label>
+    <label class="sl">Rumble <input type="range" id="sRum" min="0" max="1" step="0.05" value="0.8"><span class="v" id="vRum">0.80</span></label>
+    <div class="chk"><input type="checkbox" id="cInvY"> Invert Y</div>
   </div></details>
 </div>
 
@@ -356,7 +383,7 @@ class Animator {
     this.moving=false;
     this.events=[]; this.transitions=[];
     this.camPitch.reset(); this.camYaw.reset(); this.weaponKick.reset();
-    this.fired=[];
+    this.fired=[]; this.flash=0;
   }
   log(s){ this.events.push(s); if(this.events.length>40) this.events.shift(); }
   setWeapon(s){ if(s===this.weapon)return; this.transitions.push(this.weapon+' -> '+s); this.weapon=s; this.weaponT=0; }
@@ -369,7 +396,7 @@ class Animator {
     this.camPitch.fire(this.params.kick*this.params.split);
     this.weaponKick.fire(this.params.kick*(1-this.params.split));
     this.camYaw.fire((Math.random()*2-1)*0.35);
-    this.log('fire (ammo='+this.ammo+')');
+    this.flash=1; this.log('fire (ammo='+this.ammo+')');
   }
   reload(){
     if(this.weapon!=='idle' && this.weapon!=='ads') return;
@@ -457,6 +484,8 @@ const renderer = new THREE.WebGLRenderer({antialias:true});
 renderer.setPixelRatio(Math.min(devicePixelRatio,2));
 renderer.setSize(innerWidth,innerHeight);
 renderer.shadowMap.enabled = true;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.15;
 app.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
@@ -509,6 +538,7 @@ viewmodel.add(vmGun.group);
 const vmArmR = armBlock(1); vmArmR.position.set(0.15,-0.06,-0.05); viewmodel.add(vmArmR);
 const vmArmL = armBlock(-1); vmArmL.position.set(-0.18,0.0,-0.12); viewmodel.add(vmArmL);
 const vmLight = new THREE.PointLight(0xfff0d0, 1.4, 3); vmLight.position.set(0.3,0.4,0.2); camera.add(vmLight);
+const muzzleLight = new THREE.PointLight(0xffd9a0, 0, 3.5); muzzleLight.position.set(0,-0.06,-0.78); viewmodel.add(muzzleLight);
 
 // skeleton + socket debug
 const jointGroup = new THREE.Group(); jointGroup.visible=false; scene.add(jointGroup);
@@ -561,7 +591,9 @@ function moveCharacter(dt){
   let v=new THREE.Vector3();
   if(keys['KeyW']) v.add(fwd); if(keys['KeyS']) v.sub(fwd);
   if(keys['KeyD']) v.add(right); if(keys['KeyA']) v.sub(right);
-  if(v.lengthSq()>0){ v.normalize().multiplyScalar(2.0*dt); rig.root.position.add(v);
+  if(pad.connected){ v.addScaledVector(fwd, -pad.ly); v.addScaledVector(right, pad.lx); }
+  const mag=Math.min(1, v.length());
+  if(mag>0.05){ v.normalize().multiplyScalar(2.4*mag*dt); rig.root.position.add(v);
     if(mode==='tp') rig.root.rotation.y = Math.atan2(v.x,v.z);
     anim.moving=true; anim.loco='walk';
   } else { anim.moving=false; anim.loco='idle'; }
@@ -570,6 +602,8 @@ function moveCharacter(dt){
 // viewmodel transform (FP): recoil + sway + ADS
 function updateViewmodel(dt){
   viewmodel.visible = (mode==='fp');
+  muzzleLight.intensity = anim.flash*6;
+  anim.flash *= 0.72;
   if(!viewmodel.visible) return;
   const kick=anim.weaponKick.s.x;
   const adsShift=anim.aim*0.16;
@@ -580,12 +614,13 @@ function updateViewmodel(dt){
 }
 
 // UI state object (populated by wiring below)
-const ui = { grid:true, baseFov:75 };
+const ui = { grid:true, baseFov:75, adsToggle:false, paused:false };
 
 // render loop
 let last=performance.now(), fpsAcc=0, fpsN=0;
 function frame(now){
   let dt=(now-last)/1000; last=now; if(dt>0.1) dt=0.1;
+  pollGamepad(dt);
   if(!ui.paused){
     anim.update(dt);
     moveCharacter(dt);
@@ -598,6 +633,7 @@ function frame(now){
   jointMeshes.forEach(m=>m.visible=ui.skeleton);
   gripAxes.visible = muzzleAxes.visible = ui.sockets;
   grid.visible = ui.grid;
+  $('crosshair').classList.toggle('hidden', mode!=='fp');
   renderer.render(scene,camera);
   updateHud(dt);
   requestAnimationFrame(frame);
@@ -634,8 +670,8 @@ function updateHud(dt){
 })();
 
 // view buttons
-$('vFP').onclick=()=>{ mode='fp'; $('vFP').classList.add('on'); $('vTP').classList.remove('on'); };
-$('vTP').onclick=()=>{ mode='tp'; $('vTP').classList.add('on'); $('vFP').classList.remove('on'); };
+$('vFP').onclick=()=>setMode('fp');
+$('vTP').onclick=()=>setMode('tp');
 // toggles
 $('tSkel').onclick   =()=>{ ui.skeleton=!ui.skeleton; $('tSkel').classList.toggle('on',ui.skeleton); };
 $('tSockets').onclick=()=>{ ui.sockets=!ui.sockets; $('tSockets').classList.toggle('on',ui.sockets); };
@@ -645,11 +681,11 @@ $('tWire').onclick   =()=>{ ui.wire=!ui.wire; $('tWire').classList.toggle('on',u
 // actions
 $('aFire').onclick  =()=>anim.fire();
 $('aReload').onclick=()=>anim.reload();
-$('aAds').onclick   =()=>{ anim.adsHeld=!anim.adsHeld; $('aAds').classList.toggle('on',anim.adsHeld); };
+$('aAds').onclick   =()=>{ ui.adsToggle=!ui.adsToggle; $('aAds').classList.toggle('on',ui.adsToggle); };
 $('aWave').onclick  =()=>{ if(!anim.startEmote('wave')) anim.cancelEmote('toggle'); };
 $('aDance').onclick =()=>{ if(!anim.startEmote('dance')) anim.cancelEmote('toggle'); };
 $('aDamage').onclick=()=>anim.damage();
-$('aReset').onclick =()=>{ anim.reset(); $('aAds').classList.remove('on'); };
+$('aReset').onclick =()=>{ anim.reset(); ui.adsToggle=false; $('aAds').classList.remove('on'); };
 
 // sliders
 function bind(id,vid,fn,fmt){ const el=$(id),v=$(vid);
@@ -712,6 +748,69 @@ function runTests(){
   $('tests').textContent=out.join('\n');
 }
 $('aTests').onclick=runTests;
+
+// ---------------------------------------------------------------------------
+// Gamepad (Xbox / "standard" mapping)
+// ---------------------------------------------------------------------------
+const pad={connected:false,id:'',gp:null,lx:0,ly:0,rx:0,ry:0,lt:0,rt:0,
+  deadzone:0.15,sens:2.2,rumbleScale:0.8,invertY:false,prev:{}};
+function padBtn(i){ const b=pad.gp&&pad.gp.buttons[i]; return b?b.pressed:false; }
+function padEdge(i){ const p=padBtn(i); const was=!!pad.prev[i]; pad.prev[i]=p; return p&&!was; }
+function rumble(s,ms){ try{ const a=pad.gp&&pad.gp.vibrationActuator;
+  if(a&&a.playEffect){ a.playEffect('dual-rumble',{duration:ms||90,strongMagnitude:s*0.35,weakMagnitude:s}); } }catch(e){} }
+function dz(v){ const d=Math.min(0.9,Math.max(0,pad.deadzone||0)); const a=Math.abs(v);
+  return a<=d?0:Math.sign(v)*(a-d)/(1-d); }
+function setMode(m){ mode=m; $('vFP').classList.toggle('on',m==='fp'); $('vTP').classList.toggle('on',m==='tp'); }
+function bar(id,v){ const el=$(id); if(!el)return; const p=Math.abs(v)*100;
+  if(v>=0){ el.style.left='50%'; el.style.width=(p/2)+'%'; } else { el.style.left=(50-p/2)+'%'; el.style.width=(p/2)+'%'; } }
+function pollGamepad(dt){
+  const list=(navigator.getGamepads&&navigator.getGamepads())||[];
+  let gp=null; for(const g of list){ if(g&&g.connected){ gp=g; break; } }
+  const was=pad.connected; pad.connected=!!gp; pad.gp=gp; if(gp) pad.id=gp.id||pad.id;
+  if(pad.connected!==was){ $('padStatus').textContent = pad.connected?('connected: '+pad.id.slice(0,30)):'no gamepad - press any button'; }
+  if(!gp){ pad.lx=pad.ly=pad.rx=pad.ry=0; pad.lt=pad.rt=0; }
+  else{
+    pad.lx=dz(gp.axes[0]||0); pad.ly=dz(gp.axes[1]||0);
+    pad.rx=dz(gp.axes[2]||0); pad.ry=dz(gp.axes[3]||0);
+    pad.lt=gp.buttons[6]?gp.buttons[6].value:0;
+    pad.rt=gp.buttons[7]?gp.buttons[7].value:0;
+  }
+  anim.adsHeld = ui.adsToggle || (pad.lt>0.4);
+  $('aAds').classList.toggle('on', anim.adsHeld);
+  bar('barLX',pad.lx); bar('barLY',pad.ly); bar('barRX',pad.rx); bar('barRY',pad.ry);
+  const lt=$('barLT'), rt=$('barRT');
+  if(lt){ lt.style.left='0'; lt.style.width=(pad.lt*100)+'%'; }
+  if(rt){ rt.style.left='0'; rt.style.width=(pad.rt*100)+'%'; }
+  if(!gp) return;
+  if(mode==='fp'){
+    yaw   -= pad.rx*pad.sens*dt;
+    pitch -= (pad.invertY?-1:1)*pad.ry*pad.sens*dt;
+    pitch = clamp(pitch,-1.2,1.2);
+  } else if(controls.target){
+    const off=new THREE.Vector3().subVectors(camera.position, controls.target);
+    const r=Math.max(0.5,off.length());
+    let th=Math.atan2(off.x,off.z), ph=Math.acos(clamp(off.y/r,-1,1));
+    th -= pad.rx*pad.sens*dt; ph -= pad.ry*pad.sens*dt;
+    ph = clamp(ph,0.15,PI*0.95);
+    camera.position.set(controls.target.x + r*Math.sin(ph)*Math.sin(th),
+                        controls.target.y + r*Math.cos(ph),
+                        controls.target.z + r*Math.sin(ph)*Math.cos(th));
+    camera.lookAt(controls.target);
+  }
+  if(pad.rt>0.4){ anim.fire(); if(anim.flash>0.9) rumble(pad.rumbleScale,90); }
+  if(padEdge(2)) anim.reload();
+  if(padEdge(0)){ if(!anim.startEmote('wave')) anim.cancelEmote('toggle'); }
+  if(padEdge(1)){ if(!anim.startEmote('dance')) anim.cancelEmote('toggle'); }
+  if(padEdge(3)) anim.damage();
+  if(padEdge(9)){ ui.paused=!ui.paused; $('aPause').classList.toggle('on',ui.paused); }
+  if(padEdge(4)){ anim.reset(); ui.adsToggle=false; $('aAds').classList.remove('on'); }
+  if(padEdge(5)) setMode(mode==='fp'?'tp':'fp');
+}
+addEventListener('gamepadconnected',e=>{ pad.id=e.gamepad.id; });
+bind('sDz','vDz',v=>pad.deadzone=v,v=>v.toFixed(2));
+bind('sSens','vSens',v=>pad.sens=v,v=>v.toFixed(1));
+bind('sRum','vRum',v=>pad.rumbleScale=v,v=>v.toFixed(2));
+$('cInvY').onchange=()=>{ pad.invertY=$('cInvY').checked; };
 
 // go
 $('load').remove();
