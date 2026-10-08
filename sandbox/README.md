@@ -62,7 +62,8 @@ in-app **developer control panel**:
   time; scrub / pause / step the current weapon clip.
 - **Tests:** an in-page "Run invariant tests" button.
 
-It loads Three.js from a CDN via an import map, so it needs internet access the first time.
+**It is fully self-contained** - Three.js is inlined in the file, so it works offline, from
+`file://`, or through any viewer. No CDN, no import map, no network needed.
 
 **Controller (Xbox / any "standard"-mapping gamepad):**
 
